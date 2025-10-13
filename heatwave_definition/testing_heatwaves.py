@@ -1,0 +1,1 @@
+# I'm using this script to test my heatwave definitions across all my sites# Load climatological datahistorical_data = pd.read_csv('/Users/marleeyork/Documents/project2/data/extracted_daily_climate_data_wide_tmax.csv')
