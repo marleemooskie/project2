@@ -1,8 +1,7 @@
 # This script includes all the functions to load in your data
 # Loading packages
-import pandas as pd
+import pandas as pdta
 from datetime import datetime
-import os
 import os
 
 # Name: loadAMF()
