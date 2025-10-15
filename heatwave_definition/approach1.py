@@ -358,16 +358,16 @@ def find_heatwaves(dates, hotdays, minimum_length, gap_days, gap_day_window):
         gaps_left = gap_days
         # Assuming heatwave, set to True
         while True:
-            print("Gaps left:" + str(gaps_left))
+            # print("Gaps left:" + str(gaps_left))
             # Iteratively move forward a day and check if its a hotday
             # If it is a hot day...
             
             # If its a hot day
             if (hotdays[i+days_forward] == 1):
-                print("hotday" + str(days_forward+1))
+                # print("hotday" + str(days_forward+1))
                 # if its the third consecutive hot day, start the heatwave
                 if (days_forward+1 == minimum_length):
-                    print("we have a heatwave! starting" + str(dates[i]))
+                    # print("we have a heatwave! starting" + str(dates[i]))
                     start_indices.append(i)
 
                 # If we are already in a heatwave, tomorrow is not a heatwave, 
@@ -389,7 +389,7 @@ def find_heatwaves(dates, hotdays, minimum_length, gap_days, gap_day_window):
             # If we are in a heatwave, but its not a hot day, and we have no more gaps left,
             # then make yesterday the 
             elif ((gaps_left == 0) & ((days_forward+1) > minimum_length)):
-                print("heatwave ending!")
+                # print("heatwave ending!")
                 end_indices.append(i+days_forward-2)
                 break
             
@@ -546,7 +546,7 @@ def get_heatwave_indicator(start_dates, end_dates, daily_dates):
     # For each start and end dates, create a range of dates in between
     for start, end in zip(start_dates, end_dates):
         date_range = pd.date_range(start=start,end=end,freq='D')
-        heatwave_days[heatwave_days['date'].isin(date_range)] = 1
+        heatwave_days[heatwave_days['date'].isin(date_range)].heatwave_indicator = 1
     
     return heatwave_days
     
@@ -668,3 +668,43 @@ def fit_heatwaves(flux_dates, flux_temperature,
 # print(heatwaves_Whs["summary"])
 # plt.show(heatwaves_Whs["plot"])
 print("Heatwave defining functions all loaded.")
+
+
+def calculate_moisture(timeseries_dates,timeseries_moisture,start_dates,end_dates):
+    '''
+    Name: calculate_moisture()
+    Summary: This provides the average moisture conditions during a given heatwave
+    evet.
+
+    Input: timeseries_dates ~ daily dates over the moisture timeseries
+           timeserues_moisture ~ daily moisture conditions of interest over the timeseries
+           start_dates ~ vector of heatwave start dates
+           end_dates ~ vector of heatwave end dates
+           
+
+    Output: moisture_averages ~ dataframe of start date, end date, and average
+            moisture conditions over that time period
+    '''
+    moisture_averages = []
+    moisture_totals = []
+    # Loop through each heatwave
+    for start, end in zip(start_dates, end_dates):
+        # Create date range for the heatwave
+        date_range = pd.date_range(start=start,end=end,freq='D')
+        # Find moisture conditions during that period
+        moisture = timeseries_moisture[timeseries_dates.isin(date_range)]
+        # Calculate average moisture
+        average = sum(moisture) / len(moisture)
+        total = sum(moisture)
+        # Add to list of heatwave moisture averages
+        moisture_averages.append(average)
+        moisture_totals.append(total)
+        
+    
+    heatwave_moisture = pd.DataFrame({'start_date':list(start_dates),
+                                      'end_date':list(end_dates),
+                                      'moisture_average':list(moisture_averages),
+                                      'moisture_total':list(moisture_totals)
+                                      })
+    
+    return heatwave_moisture
