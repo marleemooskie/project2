@@ -1,20 +1,21 @@
 # This script includes all the functions to load in your data
 # Loading packages
-import pandas as pdta
+import pandas as pd
 from datetime import datetime
 import os
 
-# Name: loadAMF()
-# Summary: Reads a directory of AmeriFlux files into one dataframe
-
-# Input: path ~ filepath for AmeriFlux data directory
-#        measures ~ list of variables we want to pull from each site, not
-#        not including site itself (that will be done for you)
-
-# Output: AMF_data ~ merged dataframe of all site data with a site identifier added
-
 def loadAMF(path, measures=['TIMESTAMP_START','TA_F','SW_IN_F','VPD_F','P_F',
                             'NEE_VUT_REF','RECO_NT_VUT_REF','GPP_NT_VUT_REF']):
+    '''
+    Name: loadAMF()
+    Summary: Reads a directory of AmeriFlux files into one dataframe
+
+    Input: path ~ filepath for AmeriFlux data directory
+           measures ~ list of variables we want to pull from each site, not
+           not including site itself (that will be done for you)
+
+    # Output: AMF_data ~ merged dataframe of all site data with a site identifier added
+    '''
     # Check if the filepath is actually a directory or not
     try:
         os.scandir(path) 
@@ -47,15 +48,18 @@ def loadAMF(path, measures=['TIMESTAMP_START','TA_F','SW_IN_F','VPD_F','P_F',
     
     return AMF_data
 
-# Name: loadAMFFile()
-# Summary: Reads a singular AmeriFlux file into a dataframe
 
-# Input: this_file ~ filepath for AMF data saved as csv
-#        measures ~ list of variables that will be included in data
-
-# Output: file_df ~ AMF data organized into dataframe with additional site column
 
 def loadAMFFile(this_file, measures):
+    '''
+    Name: loadAMFFile()
+    Summary: Reads a singular AmeriFlux file into a dataframe
+
+    Input: this_file ~ filepath for AMF data saved as csv
+           measures ~ list of variables that will be included in data
+
+    Output: file_df ~ AMF data organized into dataframe with additional site column
+    '''
     # Pull the site name from the filename
     filename = os.path.basename(this_file)
     site = filename[4:10]
@@ -71,7 +75,7 @@ def loadAMFFile(this_file, measures):
     
     return file_df
 
-
+print("All data loading functions loaded.")
 
 
 

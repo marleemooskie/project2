@@ -8,42 +8,20 @@ from matplotlib import pyplot as plt
 from datetime import datetime
 from matplotlib import pyplot as plt
 
-# Settings
+#  The following is all data prep for the examples in this page
+
 # Setting all columns to be printed
-pd.set_option('display.max_columns', None)
+# pd.set_option('display.max_columns', None)
 
 # Import data: starting with US-Whs site
-flux_data_Whs = loadAMFFile('/Users/marleeyork/Documents/project2/AMFdata/AMF_US-Whs_FLUXNET_SUBSET_HH_2007-2020_3-5.csv', 
-                            measures = ['TIMESTAMP_START','TA_F','SW_IN_F','VPD_F','P_F','NEE_VUT_REF','RECO_NT_VUT_REF','GPP_NT_VUT_REF'])
-historical_data = pd.read_csv('/Users/marleeyork/Documents/project2/extracted_daily_climate_data_wide_tmax.csv')
-historical_data_Whs = historical_data.loc[:,['date','US-Whs']]
-historical_data_Whs = historical_data_Whs.rename(columns={"date":"date", "US-Whs":"Tmax"})
-print(flux_data_Whs.head())
-print(historical_data_Whs.head())
+# flux_data_Whs = loadAMFFile('/Users/marleeyork/Documents/project2/AMFdata/AMF_US-Whs_FLUXNET_SUBSET_HH_2007-2020_3-5.csv', 
+#                             measures = ['TIMESTAMP_START','TA_F','SW_IN_F','VPD_F','P_F','NEE_VUT_REF','RECO_NT_VUT_REF','GPP_NT_VUT_REF'])
+# historical_data = pd.read_csv('/Users/marleeyork/Documents/project2/extracted_daily_climate_data_wide_tmax.csv')
+# historical_data_Whs = historical_data.loc[:,['date','US-Whs']]
+# historical_data_Whs = historical_data_Whs.rename(columns={"date":"date", "US-Whs":"Tmax"})
+# flux_data_Whs['timestamp'] = pd.to_datetime(flux_data_Whs['TIMESTAMP_START'], format='%Y%m%d%H%M')
+# historical_data_Whs['date'] = pd.to_datetime(historical_data_Whs['date'], format='%Y-%m-%d')
 
-# DATA EXPLORATION ############################################################
-# Checking to see if I am working with continuous data: data is continuous
-# Convert to datetime just to be safe
-flux_data_Whs['timestamp'] = pd.to_datetime(flux_data_Whs['TIMESTAMP_START'], format='%Y%m%d%H%M')
-historical_data_Whs['date'] = pd.to_datetime(historical_data_Whs['date'], format='%Y-%m-%d')
-
-# Set as index
-flux_data_Whs = flux_data_Whs.set_index('timestamp')
-
-# Generate the full expected range of dates
-full_range = pd.date_range(start=flux_data_Whs.index.min(), end=flux_data_Whs.index.max(), freq='H')
-
-# Compare the expected range to what we have
-missing = full_range.difference(flux_data_Whs.index)
-
-if len(missing) == 0:
-    print("All timestamps are continuous.")
-else:
-    print(f"⚠️ Missing {len(missing)} timestamps:")
-    print(missing)
-
-# Checking for any missing temperature values: None missing
-flux_data_Whs.isna().sum()
 
 # FUNCTIONS ###################################################################
 
@@ -689,3 +667,4 @@ def fit_heatwaves(flux_dates, flux_temperature,
 # print(heatwaves_Whs["start_dates"])
 # print(heatwaves_Whs["summary"])
 # plt.show(heatwaves_Whs["plot"])
+print("Heatwave defining functions all loaded.")
