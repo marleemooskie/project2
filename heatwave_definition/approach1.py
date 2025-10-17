@@ -246,16 +246,35 @@ def define_EHF_hotdays(timeseries_dates, timeseries_temperature,
     Summary: Returns an indicator (0/1) whether each day is a hot day or not based on
              the Excess Heat Factor described by Perkins & Alexander (2013)   
 
-    Input: timeseries_dates ~ dates associated with the timeseries we want to define as hot or not
-           timeseries_temperature ~ temperatures associated with each day of the timeseries
+    Input: timeseries_dates ~ daily dates associated with average temperatures
+           timeseries_temperature ~ daily average temperatures over timeseries of interest
            historical_dates ~ vector of dates over historical/climatological data
            historical_average_temperature ~ this must be DAILY AVERAGES, not min/max
 
     Output: EHF_hotdays ~ indicator vector (0 or 1) of length timeseries that defines
                        each day is 1 = hot day, or 0 = not hot day based on EHF
     '''
+    # Get the 95th quantile of climatological mean temperature
+    T95 = historical_temperature.quantile(.95)
     
-    # need to fill this in whenever I get daily averages
+    # Find the acclimation heat indice
+    three_day_mean_list = []
+    thirty_day_mean_list = []
+    EHI_accl_list = []
+    EHI_sig_list = []
+    EHF = []
+    for i in range(29,len(timeseries_temperature)):
+        three_day_mean = timeseries_temperature[(i-2):(i+1)].sum() / 3
+        three_day_mean_list.append(three_day_mean)
+        thirty_day_mean = timeseries_temperature[(i-29):(i+1)].sum() / 30
+        thirty_day_mean_list.append(thirty_day_mean)
+        EHI_accl = max([1,three_day_mean - thirty_day_mean])
+        EHI_accl_list.append(EHI_accl)
+        EHI_sig = three_day_mean - T95
+        EHI_sig_list.append(EHI_sig)
+        EHF.append(EHI_accl*EHI_sig)
+        
+        
     
     return EHF_hotdays
 
@@ -546,8 +565,8 @@ def get_heatwave_indicator(start_dates, end_dates, daily_dates):
     # For each start and end dates, create a range of dates in between
     for start, end in zip(start_dates, end_dates):
         date_range = pd.date_range(start=start,end=end,freq='D')
-        heatwave_days[heatwave_days['date'].isin(date_range)].heatwave_indicator = 1
-    
+        heatwave_days.loc[heatwave_days['date'].isin(date_range),'heatwave_indicator'] = 1
+     
     return heatwave_days
     
 # Example of the above
@@ -633,7 +652,7 @@ def fit_heatwaves(flux_dates, flux_temperature,
                               "max_temperature": daily_max_temperatures.max_temperature[indicator.heatwave_indicator == 1]})
     # Provide a plot of a heatwave
     fig, ax = plt.subplots()
-    ax.scatter(daily_max_temperatures.date,daily_max_temperatures.max_temperature, s=.5)
+    ax.scatter(daily_max_temperatures.date,daily_max_temperatures.max_temperature, s=.5, c='lightgrey')
     ax.scatter(periods.date,periods.max_temperature,s=.5,c="red")
     ax.set_title(site)
     heatwave_plot = fig
@@ -693,10 +712,15 @@ def calculate_moisture(timeseries_dates,timeseries_moisture,start_dates,end_date
         date_range = pd.date_range(start=start,end=end,freq='D')
         # Find moisture conditions during that period
         moisture = timeseries_moisture[timeseries_dates.isin(date_range)]
-        # Calculate average moisture
-        average = sum(moisture) / len(moisture)
-        total = sum(moisture)
-        # Add to list of heatwave moisture averages
+        # If we have moisture for that dataset
+        if len(moisture) > 0:
+            # Calculate average moisture
+            average = sum(moisture) / len(moisture)
+            total = sum(moisture)
+            # Add to list of heatwave moisture averages
+        else:
+            average = pd.NA
+            total = pd.NA
         moisture_averages.append(average)
         moisture_totals.append(total)
         
