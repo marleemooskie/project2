@@ -8,21 +8,6 @@ from matplotlib import pyplot as plt
 from datetime import datetime
 from matplotlib import pyplot as plt
 
-#  The following is all data prep for the examples in this page
-
-# Setting all columns to be printed
-# pd.set_option('display.max_columns', None)
-
-# Import data: starting with US-Whs site
-# flux_data_Whs = loadAMFFile('/Users/marleeyork/Documents/project2/AMFdata/AMF_US-Whs_FLUXNET_SUBSET_HH_2007-2020_3-5.csv', 
-#                             measures = ['TIMESTAMP_START','TA_F','SW_IN_F','VPD_F','P_F','NEE_VUT_REF','RECO_NT_VUT_REF','GPP_NT_VUT_REF'])
-# historical_data = pd.read_csv('/Users/marleeyork/Documents/project2/extracted_daily_climate_data_wide_tmax.csv')
-# historical_data_Whs = historical_data.loc[:,['date','US-Whs']]
-# historical_data_Whs = historical_data_Whs.rename(columns={"date":"date", "US-Whs":"Tmax"})
-# flux_data_Whs['timestamp'] = pd.to_datetime(flux_data_Whs['TIMESTAMP_START'], format='%Y%m%d%H%M')
-# historical_data_Whs['date'] = pd.to_datetime(historical_data_Whs['date'], format='%Y-%m-%d')
-
-
 # FUNCTIONS ###################################################################
 
 def find_max_temperatures(date_vector, temperature_vector):
@@ -90,15 +75,6 @@ def find_min_temperatures(date_vector, temperature_vector):
     return min_temperatures
 
 
-# Example of the find_max_temperatures() and find_min_temperatures()
-# max_temperatures_Whs = find_max_temperatures(flux_data_Whs.timestamp, flux_data_Whs.TA_F)
-# min_temperatures_Whs = find_min_temperatures(flux_data_Whs.timestamp, flux_data_Whs.TA_F)
-
-# plt.figure()
-# plt.scatter(max_temperatures_Whs.date, max_temperatures_Whs.max_temperature, color= 'red', s = .5)
-# plt.scatter(min_temperatures_Whs.date, min_temperatures_Whs.min_temperature, color = 'blue', s = .5)
-# plt.show()
-
 def moving_window_quantile(dates, measure, measure_quantile, window_length):
     '''
     Name: moving_window_quantiles()
@@ -159,19 +135,6 @@ def moving_window_quantile(dates, measure, measure_quantile, window_length):
     return window_quantiles
 
 
-# An example of the moving_window_quantiles() function, taking in US-Whs historical dates 
-# and daily maximum temperature and calculating the 90th percentile within a 15 day window.
-# max_temperature_90th_quantiles = moving_window_quantile(
-#     dates = historical_data_Whs.date, 
-#     measure = historical_data_Whs.Tmax, 
-#     measure_quantile = .9,
-#     window_length = 15
-#     )
-
-# plt.scatter(max_temperature_90th_quantiles['month_day'], max_temperature_90th_quantiles['quantiles'])
-# plt.show()    
-
-
 def define_hotdays(timeseries_dates, timeseries_temperature, threshold_month_day, threshold, comparison = "greater"):
     '''
     Name: define_hotdays()
@@ -214,30 +177,6 @@ def define_hotdays(timeseries_dates, timeseries_temperature, threshold_month_day
     
     return hotdays
 
-# Example of the define_hotdays() function, taking in historical flux Tmax temperatures
-# (found using find_max_temperatures()) and comparing them to a threshold of
-# the historical 90th quantile of Tmax over a 15 day window (using moving_window_quantiles())
-# max_temperatures_Whs = find_max_temperatures(flux_data_Whs.timestamp, flux_data_Whs.TA_F)
-# max_temperature_90th_quantiles = moving_window_quantile(
-#    dates = historical_data_Whs.date, 
-#     measure = historical_data_Whs.Tmax, 
-#     measure_quantile = .9,
-#    window_length = 15
-#     )
-# hotdays_Whs = define_hotdays(
-#     timeseries_dates = max_temperatures_Whs['date'],
-#     timeseries_temperature = max_temperatures_Whs['max_temperature'],
-#     threshold_month_day = max_temperature_90th_quantiles['month_day'],
-#     threshold = max_temperature_90th_quantiles['quantiles'],
-#     comparison = "greater"
-#     )
-# print(hotdays_Whs)
-
-# Plotting the above example
-# hotdays = max_temperatures_Whs[hotdays_Whs.hotday_indicator==1]
-# plt.scatter(max_temperatures_Whs.date, max_temperatures_Whs.max_temperature, s = .5)
-# plt.scatter(hotdays.date, hotdays.max_temperature, color="red", s=.5)
-# plt.show()
 
 def define_EHF_hotdays(timeseries_dates, timeseries_temperature, 
                        historical_dates, historical_temperature):
@@ -251,7 +190,8 @@ def define_EHF_hotdays(timeseries_dates, timeseries_temperature,
            historical_dates ~ vector of dates over historical/climatological data
            historical_average_temperature ~ this must be DAILY AVERAGES, not min/max
 
-    Output: EHF_hotdays ~ indicator vector (0 or 1) of length timeseries that defines
+    Output: EHF_df ~ dataframe including the EHF score and an indicator vector 
+                        (0 or 1) of length timeseries that defines
                        each day is 1 = hot day, or 0 = not hot day based on EHF
     '''
     # Calculate the 3 day moving average for historical data
@@ -263,190 +203,42 @@ def define_EHF_hotdays(timeseries_dates, timeseries_temperature,
     # Get the 95th quantile of climatological mean temperature
     T95 = np.quantile(historical_DMT,.9)
     
-    # Find the acclimation heat indice
+    # Initialize lists to store all the indices
     three_day_mean_list = []
     thirty_day_mean_list = []
     EHI_accl_list = []
     EHI_sig_list = []
     EHF_hotdays = []
     for i in range(29,len(timeseries_temperature)):
+        # Calculate and store the 3 day mean
         three_day_mean = timeseries_temperature[(i-2):(i+1)].sum() / 3
         three_day_mean_list.append(three_day_mean)
+        # Calculate and store the 30 day mean
         thirty_day_mean = timeseries_temperature[(i-29):(i+1)].sum() / 30
         thirty_day_mean_list.append(thirty_day_mean)
-        EHI_accl = max([1,three_day_mean - thirty_day_mean])
+        # Calculate the acclimation score
+        EHI_accl = three_day_mean - thirty_day_mean
         EHI_accl_list.append(EHI_accl)
+        # Calculate the universal score
         EHI_sig = three_day_mean - T95
         EHI_sig_list.append(EHI_sig)
-        EHF_hotdays.append(EHI_accl*EHI_sig)
+        # Use the prior to find the extreme heat factor
+        EHF = EHI_sig * max(0,EHI_accl)
+        EHF_hotdays.append(EHF)
         
+    print("95th percentile of historical 3-day means:", T95)
+    print("Range of historical 3-day means:", np.min(historical_DMT), "to", np.max(historical_DMT))
+    print("EHI_sig mean:", np.mean(EHI_sig_list), "min:", np.min(EHI_sig_list), "max:", np.max(EHI_sig_list))
+    print("EHI_accl mean:", np.mean(EHI_accl_list), "min:", np.min(EHI_accl_list), "max:", np.max(EHI_accl_list))
+
+    # Create an indicator for EHF   
     hotday_indicator = [1 if x > 0 else 0 for x in EHF_hotdays]
-        
+    # Organize into a dataframe    
     EHF_df = pd.DataFrame({'date':timeseries_dates[29:],
                            'EHF_score':EHF_hotdays,
                            'hotday_indicator':hotday_indicator}).reset_index(drop=True)
     
     return EHF_df
-
-
-
-def find_consecutive_hotdays(dates, hotdays, minimum_length):
-    '''
-    Name: find_consecutive_hotdays()
-    Summary: This finds periods of time with consecutive hot days for heatwave definition     
-
-    Input: dates ~ dates across the timeseries of interest
-           hotdays ~ binary (0/1) indicator of hot day, received from define_hotdays()
-           minimum_length ~ minimum number of contiguous hotdays to be considered heatwave
-
-    Output: start_dates ~ vector of dates that mark the beginning of heatwaves
-            end_dates ~ vector of dates that mark the end of heatwaves
-    '''
-    # Loop through hotdays
-    start_indices = []
-    end_indices = []
-    i = 0
-    # Loop through each day
-    while i < len(hotdays) - minimum_length + 1:
-        # If the previous day was a hotday, move forward to the next
-        if (i > 0):
-            if (hotdays[i-1] == 1):
-                i += 1
-                continue
-        
-        days_forward = 0
- 
-
-        # Assuming heatwave, set to True
-        while True:
-            # Iteratively move forward a day and check if its a hotday
-            # If it is a hot day...
-            if (hotdays[i+days_forward] == 1):
-                print("hotday" + str(days_forward))
-                # and its the minimum length hot day in a row, add i as
-                # the start index (heatwave has started)
-                if (days_forward == minimum_length):
-                    print("we have a heatwave! starting" + str(dates[i]))
-                    start_indices.append(i)
-                    # If we are in a heatwave, but tomorrow is not a hotday, 
-                    # add the current day as the end index, set i to the next day, and leave the loop
-                if ((days_forward >= minimum_length) & (hotdays[i+days_forward+1] == 0)):
-                    print("heatwave ends at " + str(dates[i+days_forward]))
-                    end_indices.append(i+days_forward)
-                    break
-                # Move onto next day to see if heatwave continues
-                days_forward += 1
-            
-            # If its not a hot day, break and move to next day
-            else: break
-        # If its not a hot day, or the heatwave is over, 
-        i += 1
-    
-    start_dates = dates[start_indices]
-    end_dates = dates[end_indices]
-    
-    return start_dates, end_dates
-
-                    
-# This is an example of the find_consecutive_hotdays() function
-# start_dates, end_dates = find_consecutive_hotdays(dates = hotdays_Whs.date, 
-#                                                   hotdays = hotdays_Whs.hotday_indicator, 
-#                                                   minimum_length = 3
-#                                                   )                
-# print([start_dates,end_dates])
-
-def find_heatwaves_old(dates, hotdays, minimum_length, gap_days, gap_day_window):
-    '''
-    REVISION NOTE: I REWROTE THIS FUNCTION BELOW FOR MORE CLARITY. REFER TO THIS
-    IF SOMETHING IS BROKEN.
-    Name: find_heatwaves_old()
-    Summary: This finds periods of time with consecutive hot days for heatwave definition ,
-           with the opportunity to add gap days    
-
-    Input: dates ~ dates across the timeseries of interest
-           hotdays ~ binary (0/1) indicator of hot day, received from define_hotdays()
-           minimum_length ~ minimum number of contiguous hotdays to be considered heatwave
-           gap_days ~ number of gap days allowed per gap_day_window
-           gap_day_window ~ number of days that gap_days can fall in 
-
-    Output: start_dates ~ vector of dates that mark the beginning of heatwaves
-            end_dates ~ vector of dates that mark the end of heatwaves
-    '''
-    
-    # Loop through hotdays
-    start_indices = []
-    end_indices = []
-    i = 0
-    # Loop through each day
-    while i < len(hotdays) - minimum_length + 1:
-        # If the previous day was a hotday, move forward to the next
-        if (i > 0):
-            if (hotdays[i-1] == 1):
-                i += 1
-                continue
-        
-        days_forward = 0
-        gaps_left = gap_days
-        # Assuming heatwave, set to True
-        while True:
-            # print("Gaps left:" + str(gaps_left))
-            # Iteratively move forward a day and check if its a hotday
-            # If it is a hot day...
-            
-            # If its a hot day
-            if (hotdays[i+days_forward] == 1):
-                # print("hotday" + str(days_forward+1))
-                # if its the third consecutive hot day, start the heatwave
-                if (days_forward+1 == minimum_length):
-                    # print("we have a heatwave! starting" + str(dates[i]))
-                    start_indices.append(i)
-
-                # If we are already in a heatwave, tomorrow is not a heatwave, 
-                # and we have no more gap days, make today the end of the heatwave
-                if ((days_forward+1 >= minimum_length) & (hotdays[i+days_forward+1] == 0) & (gaps_left==0)):
-                    print("heatwave ends at " + str(dates[i+days_forward]))
-                    end_indices.append(i+days_forward)
-                    break
-                # Move onto next day to see if heatwave continues
-                days_forward += 1
-                
-            # If we are in a heatwave, but its not a hot day, but we have a gap day available
-            # then subtract a gap day and move forward
-            elif ((gaps_left > 0) & (days_forward+1 > minimum_length)):
-                gaps_left -= 1
-                days_forward += 1
-                ("We used a gap day! " + str(gaps_left) + " left!")
-            
-            # If we are in a heatwave, but its not a hot day, and we have no more gaps left,
-            # then make yesterday the 
-            elif ((gaps_left == 0) & ((days_forward+1) > minimum_length)):
-                # print("heatwave ending!")
-                end_indices.append(i+days_forward-2)
-                break
-            
-            # Otherwise, its not a heatwave and we just need to leave
-            else: break
-        
-            # if we make it through a gap day window length, add another gap day
-            if ((days_forward) % gap_day_window == 0):
-                gaps_left += gap_days
-            
-        # Move to the next day to check if it starts a heatwave
-        i += 1
-    
-    # If the beginning or end dates are not hotdays, cut them off of the heatwave
-    for j in range(len(start_indices)):
-        if (hotdays.iloc[start_indices[j]] == 0):
-            start_indices[j] += 1
-        if (hotdays.iloc[end_indices[j]] == 0):
-            end_indices[j] -= 1
-    
-    start_dates = dates[start_indices]
-    end_dates = dates[end_indices]
-    
-   
-    return start_dates, end_dates
-
 
 def find_heatwaves(hotdays, dates, minimum_length, tolerance, gap_day_window):
     """
@@ -534,10 +326,126 @@ def find_heatwaves(hotdays, dates, minimum_length, tolerance, gap_day_window):
 
     return start_dates, trimmed_end_dates
 
-
 # The following are examples of the heatwave definition with gap days options
 # start_dates_new, end_dates_new = find_heatwaves(hotdays_Whs.date, hotdays_Whs['hotday_indicator'], minimum_length=3, gap_days=1, gap_day_window=8)
 # start_dates_new2, end_dates_new2 = find_heatwaves(hotdays_Whs.date, hotdays_Whs['hotday_indicator'], minimum_length=5, gap_days=1, gap_day_window=5)
+
+def find_Pezza_heatwaves(max_hotdays, min_hotdays, dates, minimum_length,
+                         tolerance, gap_day_window):
+    '''
+
+    Parameters
+    ----------
+    max_hotdays : TYPE
+        DESCRIPTION. 0/1 indicator of days that surpass max temp 90th quantile
+    min_hotdays : TYPE
+        DESCRIPTION. 0/1 indicator of days that surpass min temp 90th quantile
+    dates : TYPE
+        DESCRIPTION. vector of dates associated with max_hotdays and min_hotdays
+    minimum_length : TYPE
+        DESCRIPTION. minimum number of consecutive days for a heatwave to occur
+    tolerance:
+        DESCRIPTION. number of days per gap_day_window that can be non-active
+                    and a heatwave continue. This will stay 0 for Pezza approach
+    gap_day_window:
+        DESCRIPTION. length of days that we replenish tolerance days after during a heatwave,
+                    thiswill stay 0 for Pezza approach.
+
+    Returns
+    -------
+    extended_start_dates : TYPE
+        DESCRIPTION. start dates of heatwaves
+    end_dates : TYPE
+        DESCRIPTION. end dates of heatwaves
+
+    '''
+    # Find days where its both a max and min hotday
+    active = (max_hotdays == 1) & (min_hotdays == 1)
+    
+    start_dates, end_dates = [], []
+    in_heatwave = False
+    start_time = None
+    tolerance_left = tolerance
+    hotday_count = 0
+    total_days_in_window = 0 
+    
+    # Now go through the process of finding those consecutive hotdays
+    # This is the same as in the normal heatwave function
+    for i in range(len(active)):
+        if active[i]:
+            if not in_heatwave:
+                # Start new heatwave
+                in_heatwave = True
+                start_time = dates[i]
+                hotday_count = 1
+                total_days_in_window = 1
+                tolerance_left = tolerance
+            else:
+                # Continue existing heatwave
+                hotday_count += 1
+                total_days_in_window += 1
+
+                # Reset tolerance if window reached
+                if total_days_in_window >= gap_day_window:
+                    tolerance_left = tolerance
+                    total_days_in_window = 0  # start a new window
+        else:
+            if in_heatwave:
+                total_days_in_window += 1
+                if tolerance_left > 0:
+                    # Allow a cool day, but don't add to hotday_count
+                    tolerance_left -= 1
+                else:
+                    # No tolerance left → heatwave ends
+                    if hotday_count >= minimum_length:
+                        end_time = dates[i - 1]
+                        start_dates.append(start_time)
+                        end_dates.append(end_time)
+                    # Reset
+                    in_heatwave = False
+                    hotday_count = 0
+                    tolerance_left = tolerance
+                    total_days_in_window = 0
+
+    # Handle if heatwave goes till end
+    if in_heatwave and hotday_count >= minimum_length:
+        end_time = dates.iloc[-1]
+        start_dates.append(start_time)
+        end_dates.append(end_time)
+        
+    # Trim off any non-hotdays around the end dates
+    trimmed_end_dates = []
+    for start, end in zip(start_dates, end_dates):
+       mask = (dates >= start) & (dates <= end)
+       segment = active[mask]
+
+       # Walk backward to find last hotday
+       for j in range(len(segment) - 1, -1, -1):
+           if segment.iloc[j] if hasattr(segment, "iloc") else segment[j]:
+               if hasattr(dates, "iloc"):
+                   trimmed_end_dates.append(dates[mask].iloc[j])
+               else:
+                   trimmed_end_dates.append(np.array(dates)[mask][j])
+               break
+       else:
+           trimmed_end_dates.append(end)
+           
+    # If the day before a heatwave starts is a max_hotday, then add that into the heatwave
+    extended_start_dates = []
+    for start in start_dates:
+        # Find date for previous day
+        previous_day = start - pd.Timedelta(days=1)
+        # Check if its a max_hotday
+        if (max_hotdays[dates==previous_day].iloc[0] == 1):
+            # If it is, then change the start date to the previous day
+            extended_start_dates.append(previous_day)
+        else:
+            # Otherwise, keep the start date the same
+            extended_start_dates.append(start)
+            
+    
+    return extended_start_dates, trimmed_end_dates
+
 
 def build_date_range(start_dates, end_dates,frequency):
     '''
@@ -709,7 +617,7 @@ def fit_heatwaves(flux_dates, flux_temperature,
                periods ~ dates and max temperature for heatwave days only
                plot ~ plot of max temperatures with heatwave days in red
     '''
-    
+    # Define heatwaves using the max approach
     if (method == 'max'):
         # Find maximum temperature for each flux day
         daily_max_temperatures = find_max_temperatures(flux_dates,flux_temperature)
@@ -723,7 +631,7 @@ def fit_heatwaves(flux_dates, flux_temperature,
             )
         # Define hotdays with the maximum temperature quantiles determined
         # prior as the threshold
-        print("Finding max temperature hot days.")
+        print(f"Finding max temperature hot days for site {site}.")
         hotdays = define_hotdays(
             timeseries_dates = daily_max_temperatures.date,
             timeseries_temperature = daily_max_temperatures.max_temperature,
@@ -731,25 +639,18 @@ def fit_heatwaves(flux_dates, flux_temperature,
             threshold = max_temperature_quantiles.quantiles,
             comparison = threshold_comparison
             )
-    elif (method == "EHF"):
-        print("Finding EHF hotdays.")
-        EHF_df = define_EHF_hotdays(flux_dates, 
-                                    flux_temperature, 
-                                    historical_dates, 
-                                    historical_temperature)
-        hotdays = EHF_df[['date','hotday_indicator']].reset_index(drop=True)
-    # Determine the start and end dates of the heatwaves
-    # Default leniency is 1 gap day per every 8 days of heatwave, with min 
-    # number of 3 consecutive hotdays for a heatwave
-    start_dates, end_dates = find_heatwaves(
-         dates = hotdays.date, 
-         hotdays = hotdays.hotday_indicator,
-         minimum_length = min_heatwave_length, 
-         tolerance = tolerance, 
-         gap_day_window = gap_days_window
-         )
-     
-    if (method=='max'):
+        
+        # Determine the start and end dates of the heatwaves
+        # Default leniency is 1 gap day per every 8 days of heatwave, with min 
+        # number of 3 consecutive hotdays for a heatwave
+        start_dates, end_dates = find_heatwaves(
+             dates = hotdays.date, 
+             hotdays = hotdays.hotday_indicator,
+             minimum_length = min_heatwave_length, 
+             tolerance = tolerance, 
+             gap_day_window = gap_days_window
+             )
+        
         # Get the summary of the heatwaves
         summary = describe_heatwaves(
             start_dates = start_dates, 
@@ -773,10 +674,29 @@ def fit_heatwaves(flux_dates, flux_temperature,
         fig, ax = plt.subplots()
         ax.scatter(daily_max_temperatures.date,daily_max_temperatures.max_temperature, s=.5, c='lightgrey')
         ax.scatter(periods.date,periods.max_temperature,s=.5,c="red")
-        ax.set_title(site)
+        ax.set_title(f"Max: {site}")
         heatwave_plot = fig
         
-    elif(method=="EHF"):
+    # Define heatwaves using the EHF approach
+    elif (method == "EHF"):
+        print(f"Finding EHF hotdays for site {site}.")
+        EHF_df = define_EHF_hotdays(flux_dates, 
+                                    flux_temperature, 
+                                    historical_dates, 
+                                    historical_temperature)
+        hotdays = EHF_df[['date','hotday_indicator']].reset_index(drop=True)
+        
+        # Determine the start and end dates of the heatwaves
+        # Default leniency is 1 gap day per every 8 days of heatwave, with min 
+        # number of 3 consecutive hotdays for a heatwave
+        start_dates, end_dates = find_heatwaves(
+             dates = hotdays.date, 
+             hotdays = hotdays.hotday_indicator,
+             minimum_length = min_heatwave_length, 
+             tolerance = tolerance, 
+             gap_day_window = gap_days_window
+             )
+        
         # Get the summary of the heatwaves
         summary = describe_heatwaves(
             start_dates = start_dates, 
@@ -801,7 +721,7 @@ def fit_heatwaves(flux_dates, flux_temperature,
         fig, ax = plt.subplots()
         ax.scatter(flux_dates,flux_temperature, s=.5, c='lightgrey')
         ax.scatter(periods.date,periods.temperature,s=.5,c="red")
-        ax.set_title(site)
+        ax.set_title(f"EHF: {site}")
         heatwave_plot = fig
         
     # Create a dictionary and store all of these inside it!
@@ -816,25 +736,98 @@ def fit_heatwaves(flux_dates, flux_temperature,
     
     return heatwaves
 
-# heatwaves_Whs = fit_heatwaves(
-#     flux_dates = flux_data_Whs.timestamp, 
-#     flux_temperature = flux_data_Whs.TA_F, 
-#     historical_dates = historical_data_Whs.date,
-#     historical_temperature = historical_data_Whs.Tmax,
-#     quantile_threshold = .9,
-#     window_length = 15,
-#     threshold_comparison = 'greater',
-#     min_heatwave_length = 3,
-#     gap_days = 1,
-#     gap_days_window = 8,
-#    site = "US-Whs"
-#     )
+def fit_Pezza_heatwaves(flux_dates, flux_temperature, 
+                  historical_dates, historical_temperature_max,
+                  historical_temperature_min,
+                  min_heatwave_length = 3,
+                  site = "Example"
+                  ):
+    # Define heatwaves using the Pezza approach
+    print(f"Finding Pezza hotdays for site {site}.")
+    # Find maximum and minimum temperatures for each day 
+    daily_max_temperatures = find_max_temperatures(flux_dates,flux_temperature)
+    daily_min_temperatures = find_min_temperatures(flux_dates,flux_temperature)
+    
+    # Find the 90th quantile of the moving average max and minimum historical temperatures
+    max_temperature_quantiles = moving_window_quantile(
+        dates = historical_dates,
+        measure = historical_temperature_max,
+        measure_quantile = .9,
+        window_length = 31
+        )
+    
+    min_temperature_quantiles = moving_window_quantile(
+        dates = historical_dates,
+        measure = historical_temperature_min,
+        measure_quantile = .9,
+        window_length = 31
+        )
+        
+    # Determine hotdays by minimum and maximum temperature
+    max_hotday = define_hotdays(
+        timeseries_dates = daily_max_temperatures.date,
+        timeseries_temperature = daily_max_temperatures.max_temperature,
+        threshold_month_day = max_temperature_quantiles.month_day,
+        threshold = max_temperature_quantiles.quantiles,
+        comparison = "greater"
+        )
+        
+    min_hotday = define_hotdays(
+        timeseries_dates = daily_min_temperatures.date,
+        timeseries_temperature = daily_min_temperatures.min_temperature,
+        threshold_month_day = min_temperature_quantiles.month_day,
+        threshold = min_temperature_quantiles.quantiles,
+        comparison = "greater"
+        )
+        
+    # Determine heatwaves using function for Pezza heatwaves specifically
+    start_dates, end_dates = find_Pezza_heatwaves(
+        dates = max_hotday.date, 
+        max_hotdays = max_hotday.hotday_indicator,
+        min_hotdays = min_hotday.hotday_indicator,
+        minimum_length = 3, 
+        tolerance = 0, 
+        gap_day_window = 0
+        )
+        
+    # Get the summary of the heatwaves
+    summary = describe_heatwaves(
+        start_dates = start_dates, 
+        end_dates = end_dates, 
+        timeseries_dates = daily_max_temperatures.date, 
+        timeseries_temperature = daily_max_temperatures.max_temperature,
+        historical_dates = historical_dates,
+        historical_temperatures = historical_temperature_max,
+        method = "greater"
+        )
+        
+    # Get the vector indicator of hot days
+    indicator = get_heatwave_indicator(start_dates = start_dates, 
+                                       end_dates = end_dates, 
+                                       daily_dates = daily_max_temperatures.date
+                                       )
+    # Get the max temperatures associated with each heatwave
+    periods = pd.DataFrame({"date": daily_max_temperatures.date[indicator.heatwave_indicator == 1],
+                            "max_temperature": daily_max_temperatures.max_temperature[indicator.heatwave_indicator == 1],
+                            "min_temperature": daily_min_temperatures.min_temperature[indicator.heatwave_indicator==1]})
+    # Provide a plot of a heatwave
+    fig, ax = plt.subplots()
+    ax.scatter(daily_max_temperatures.date,daily_max_temperatures.max_temperature, s=.5, c='lightgrey')
+    ax.scatter(periods.date,periods.max_temperature,s=.5,c="red")
+    ax.set_title(f"Pezza: {site}")
+    heatwave_plot = fig
+  
+    # Create a dictionary and store all of these inside it!
+    heatwaves = {
+        "start_dates":start_dates,
+        "end_dates":end_dates,
+        "summary":summary,
+        "indicator":indicator,
+        "periods":periods,
+        "plot":heatwave_plot
+        }
 
-# print(heatwaves_Whs["start_dates"])
-# print(heatwaves_Whs["summary"])
-# plt.show(heatwaves_Whs["plot"])
-print("Heatwave defining functions all loaded.")
-
+    return heatwaves
 
 def calculate_moisture(timeseries_dates,timeseries_moisture,start_dates,end_dates):
     '''
@@ -879,3 +872,6 @@ def calculate_moisture(timeseries_dates,timeseries_moisture,start_dates,end_date
                                       })
     
     return heatwave_moisture
+
+
+print("Heatwave defining functions all loaded.")
