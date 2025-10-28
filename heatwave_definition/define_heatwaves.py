@@ -345,9 +345,11 @@ def find_consecutive_hotdays(dates, hotdays, minimum_length):
 #                                                   )                
 # print([start_dates,end_dates])
 
-def find_heatwaves(dates, hotdays, minimum_length, gap_days, gap_day_window):
+def find_heatwaves_old(dates, hotdays, minimum_length, gap_days, gap_day_window):
     '''
-    Name: find_heatwaves()
+    REVISION NOTE: I REWROTE THIS FUNCTION BELOW FOR MORE CLARITY. REFER TO THIS
+    IF SOMETHING IS BROKEN.
+    Name: find_heatwaves_old()
     Summary: This finds periods of time with consecutive hot days for heatwave definition ,
            with the opportunity to add gap days    
 
@@ -434,6 +436,77 @@ def find_heatwaves(dates, hotdays, minimum_length, gap_days, gap_day_window):
     
    
     return start_dates, end_dates
+
+
+def find_heatwaves(hotdays, dates, minimum_length, tolerance, gap_day_window):
+    """
+    Name: find_heatwaves()
+    Summary: Identify heatwaves, allowing up to `tolerance` non-hot days per `gap_day_window`.
+    Heatwave continues as long as hotdays accumulate before tolerance runs out.
+
+    Input: dates ~ dates across the timeseries of interest
+           hotdays ~ binary (0/1) indicator of hot day, received from define_hotdays()
+           minimum_length ~ minimum number of contiguous hotdays to be considered heatwave
+           gap_days ~ number of gap days allowed per gap_day_window
+           gap_day_window ~ number of days that gap_days can fall in 
+
+    Output: start_dates ~ vector of dates that mark the beginning of heatwaves
+            end_dates ~ vector of dates that mark the end of heatwaves
+
+    """
+    active = hotdays == 1
+
+    start_dates, end_dates = [], []
+    in_heatwave = False
+    start_time = None
+    tolerance_left = tolerance
+    hotday_count = 0
+    total_days_in_window = 0  # total days (hot + not) within current gap window
+
+    for i in range(len(active)):
+        if active[i]:
+            if not in_heatwave:
+                # Start new heatwave
+                in_heatwave = True
+                start_time = dates[i]
+                hotday_count = 1
+                total_days_in_window = 1
+                tolerance_left = tolerance
+            else:
+                # Continue existing heatwave
+                hotday_count += 1
+                total_days_in_window += 1
+
+                # Reset tolerance if window reached
+                if total_days_in_window >= gap_day_window:
+                    tolerance_left = tolerance
+                    total_days_in_window = 0  # start a new window
+        else:
+            if in_heatwave:
+                total_days_in_window += 1
+                if tolerance_left > 0:
+                    # Allow a cool day, but don't add to hotday_count
+                    tolerance_left -= 1
+                else:
+                    # No tolerance left → heatwave ends
+                    if hotday_count >= minimum_length:
+                        end_time = dates[i - 1]
+                        start_dates.append(start_time)
+                        end_dates.append(end_time)
+                    # Reset
+                    in_heatwave = False
+                    hotday_count = 0
+                    tolerance_left = tolerance
+                    total_days_in_window = 0
+
+    # Handle if heatwave goes till end
+    if in_heatwave and hotday_count >= minimum_length:
+        end_time = dates[-1]
+        start_dates.append(start_time)
+        end_dates.append(end_time)
+
+    return start_dates, end_dates
+
 
 # The following are examples of the heatwave definition with gap days options
 # start_dates_new, end_dates_new = find_heatwaves(hotdays_Whs.date, hotdays_Whs['hotday_indicator'], minimum_length=3, gap_days=1, gap_day_window=8)
@@ -584,7 +657,7 @@ def fit_heatwaves(flux_dates, flux_temperature,
                   window_length = 15,
                   threshold_comparison = 'greater',
                   min_heatwave_length = 3,
-                  gap_days = 1,
+                  tolerance = 1,
                   gap_days_window = 8,
                   site = "Example"
                   ):
@@ -630,7 +703,7 @@ def fit_heatwaves(flux_dates, flux_temperature,
          dates = hotdays.date, 
          hotdays = hotdays.hotday_indicator,
          minimum_length = min_heatwave_length, 
-         gap_days = gap_days, 
+         tolerance = tolerance, 
          gap_day_window = gap_days_window
          )
     # Get the summary of the heatwaves
