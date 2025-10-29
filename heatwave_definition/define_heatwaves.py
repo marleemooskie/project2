@@ -179,7 +179,7 @@ def define_hotdays(timeseries_dates, timeseries_temperature, threshold_month_day
 
 
 def define_EHF_hotdays(timeseries_dates, timeseries_temperature, 
-                       historical_dates, historical_temperature):
+                       historical_dates, historical_temperature,quantile_threshold):
     '''
     Name: define_EHF_hotdays()
     Summary: Returns a dataframe of heatwave dates, 0/1 indicator of EHF hotday,
@@ -208,13 +208,17 @@ def define_EHF_hotdays(timeseries_dates, timeseries_temperature,
     T95_by_day = (
         historical_DMT_df
         .groupby("month_day")["DMT"]
-        .quantile(0.95)
+        .quantile(quantile_threshold)
         .reset_index(name="T95")
     )
-    # Merge the 95th quantiles onto the entire DMT dataframe
-    historical_DMT_df = pd.merge(historical_DMT_df,T95_by_day,on="month_day",how="inner")
-    
-    # THIS IS WHERE I LEFT OFF
+    # Create a dataframe of timeseries data
+    timeseries_df = pd.DataFrame({'date':timeseries_dates,
+                                  'temperature':timeseries_temperature})
+    # Add a month_day column
+    timeseries_df['month_day'] = timeseries_df.date.dt.strftime('%m-%d')
+    # Merge timeseries data with the DMT 95th quantiles
+    timeseries_df = pd.merge(timeseries_df,T95_by_day,on="month_day",how="inner")
+    timeseries_df = timeseries_df.iloc[29:]
     # Initialize lists to store all the indices
     three_day_mean_list = []
     thirty_day_mean_list = []
@@ -231,24 +235,27 @@ def define_EHF_hotdays(timeseries_dates, timeseries_temperature,
         # Calculate the acclimation score
         EHI_accl = three_day_mean - thirty_day_mean
         EHI_accl_list.append(EHI_accl)
-        # Calculate the universal score
-        EHI_sig = three_day_mean - T95
-        EHI_sig_list.append(EHI_sig)
-        # Use the prior to find the extreme heat factor
-        EHF = EHI_sig * max(0,EHI_accl)
-        EHF_hotdays.append(EHF)
-        
-    print("95th percentile of historical 3-day means:", T95)
-    print("Range of historical 3-day means:", np.min(historical_DMT), "to", np.max(historical_DMT))
-    print("EHI_sig mean:", np.mean(EHI_sig_list), "min:", np.min(EHI_sig_list), "max:", np.max(EHI_sig_list))
-    print("EHI_accl mean:", np.mean(EHI_accl_list), "min:", np.min(EHI_accl_list), "max:", np.max(EHI_accl_list))
-
+    # Add calculated mean indices to the timeseries dataframe
+    timeseries_df.loc[:,'EHI_accl'] = EHI_accl_list
+    timeseries_df.loc[:,'thirty_day_mean'] = thirty_day_mean_list
+    timeseries_df.loc[:,'three_day_mean'] = three_day_mean_list
+    # Calculate the universal score
+    timeseries_df.loc[:,'EHI_sig'] = timeseries_df.three_day_mean - timeseries_df.T95
+    # Calculate for max(0,EHI_accl)
+    timeseries_df["EHI_accl"] = [max(0, x) for x in timeseries_df["EHI_accl"]]
+    # Use the prior to find the extreme heat factor
+    timeseries_df.loc[:,'EHF'] = timeseries_df.EHI_sig * timeseries_df.EHI_accl
     # Create an indicator for EHF   
-    hotday_indicator = [1 if x > 0 else 0 for x in EHF_hotdays]
-    # Organize into a dataframe    
+    hotday_indicator = [1 if x > 0 else 0 for x in timeseries_df.EHF]
+    # Organize into a dataframe   
+    print("We made it to the dataframe")
+    print("Timeseries dates: " +str(len(timeseries_dates[29:])))
+    print("Timeseries_df.EHF: " +str(len(timeseries_df.EHF)))
+    print("hotday_indicator: " +str(len(hotday_indicator)))
     EHF_df = pd.DataFrame({'date':timeseries_dates[29:],
-                           'EHF_score':EHF_hotdays,
+                           'EHF_score':timeseries_df.EHF.values,
                            'hotday_indicator':hotday_indicator}).reset_index(drop=True)
+    print("We made it past the dataframe.")
     
     return EHF_df
 
@@ -554,20 +561,6 @@ def describe_heatwaves(start_dates, end_dates, timeseries_dates, timeseries_temp
     
     return heatwave_df
 
-
-# Example of the above with the consecutive hot day method, and the additional gap method
-# heatwaves_Whs = describe_heatwaves(start_dates_new, end_dates_new, 
-#                                    flux_data_Whs.timestamp, flux_data_Whs.TA_F,
-#                                    historical_data_Whs.date, historical_data_Whs.Tmax)
-# print(heatwaves_Whs)
-# print(heatwaves_Whs.sort_values(by = 'magnitude'))
-
-# heatwaves_Whs_new = describe_heatwaves(start_dates_new, end_dates_new, 
-#                                    flux_data_Whs.timestamp, flux_data_Whs.TA_F,
-#                                    historical_data_Whs.date, historical_data_Whs.Tmax)
-# print(heatwaves_Whs_new)
-# print(heatwaves_Whs_new.sort_values(by = 'magnitude'))
-
 def get_heatwave_indicator(start_dates, end_dates, daily_dates):
     '''
     Name: get_heatwave_indicator()
@@ -695,7 +688,8 @@ def fit_heatwaves(flux_dates, flux_temperature,
         EHF_df = define_EHF_hotdays(flux_dates, 
                                     flux_temperature, 
                                     historical_dates, 
-                                    historical_temperature)
+                                    historical_temperature,
+                                    quantile_threshold)
         hotdays = EHF_df[['date','hotday_indicator']].reset_index(drop=True)
         
         # Determine the start and end dates of the heatwaves
@@ -751,7 +745,7 @@ def fit_heatwaves(flux_dates, flux_temperature,
 def fit_Pezza_heatwaves(flux_dates, flux_temperature, 
                   historical_dates, historical_temperature_max,
                   historical_temperature_min,
-                  min_heatwave_length = 3,
+                  min_heatwave_length,tolerance,gap_day_window,
                   site = "Example"
                   ):
     # Define heatwaves using the Pezza approach
@@ -797,9 +791,9 @@ def fit_Pezza_heatwaves(flux_dates, flux_temperature,
         dates = max_hotday.date, 
         max_hotdays = max_hotday.hotday_indicator,
         min_hotdays = min_hotday.hotday_indicator,
-        minimum_length = 3, 
-        tolerance = 0, 
-        gap_day_window = 0
+        minimum_length = min_heatwave_length, 
+        tolerance = tolerance, 
+        gap_day_window = gap_day_window
         )
         
     # Get the summary of the heatwaves
