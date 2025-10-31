@@ -454,14 +454,18 @@ def find_Pezza_heatwaves(max_hotdays, min_hotdays, dates, minimum_length,
     for start in start_dates:
         # Find date for previous day
         previous_day = start - pd.Timedelta(days=1)
-        # Check if its a max_hotday
-        if (max_hotdays[dates==previous_day].iloc[0] == 1):
-            # If it is, then change the start date to the previous day
-            extended_start_dates.append(previous_day)
+        # If that date is in the dataframe
+        if (previous_day in dates.values):
+            # Check if its a max_hotday
+            if (max_hotdays[dates==previous_day].iloc[0] == 1):
+                # If it is, then change the start date to the previous day
+                extended_start_dates.append(previous_day)
+            else:
+                # Otherwise, keep the start date the same
+                extended_start_dates.append(start)
+        # If its not in the dataframe then keep the same start date
         else:
-            # Otherwise, keep the start date the same
             extended_start_dates.append(start)
-            
     
     return extended_start_dates, trimmed_end_dates
 

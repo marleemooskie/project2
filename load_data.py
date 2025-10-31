@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 import os
 
-def loadAMF(path, skip = '',measures=['TIMESTAMP','TA_F','SW_IN_F','VPD_F','P_F',
+def loadAMF(path, skip = [''],measures=['TIMESTAMP','TA_F','SW_IN_F','VPD_F','P_F',
                             'NEE_VUT_REF','RECO_NT_VUT_REF','GPP_NT_VUT_REF']):
     '''
     Name: loadAMF()
@@ -41,7 +41,7 @@ def loadAMF(path, skip = '',measures=['TIMESTAMP','TA_F','SW_IN_F','VPD_F','P_F'
         AMF_data = pd.DataFrame(columns=my_columns)
         # Loop through each file in the path
         for this_file in paths:
-            if (this_file==skip):
+            if this_file in skip:
                 continue
             else:
                 # Retrieve an AmeriFlux dataframe
