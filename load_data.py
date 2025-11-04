@@ -163,8 +163,8 @@ def find_shared_variables(path,measures):
     # Print some statements about what variables you can use
     print('You have ' + str(len(available_variables)) + ' variables shared across all sites.')
     
-    if (len(available_variables) > 0):
-        print('Variables available at all sites: ' + available_variables)
+    #if (len(available_variables) > 0):
+        #print('Variables available at all sites: ' + ', '.join(available_variables)))
     
     return variable_info
     
