@@ -562,7 +562,6 @@ def describe_heatwaves(start_dates, end_dates, timeseries_dates, timeseries_temp
     
         heatwave_df['magnitude'] = heatwave_magnitude
         
-    
     return heatwave_df
 
 def get_heatwave_indicator(start_dates, end_dates, daily_dates):
@@ -615,6 +614,7 @@ def fit_heatwaves(flux_dates, flux_temperature,
      Summary: This wraps defining, summarizing, and plotting heatwaves into one.  
 
      Input:    method ~ "max" for maximum temperature quantile approach,
+                        "min" for minimum temperature quantile approach,
                         "EHF" for EHF approach (use daily temperature for flux temp)
             
             
@@ -684,6 +684,65 @@ def fit_heatwaves(flux_dates, flux_temperature,
         ax.scatter(daily_max_temperatures.date,daily_max_temperatures.max_temperature, s=.5, c='lightgrey')
         ax.scatter(periods.date,periods.max_temperature,s=.5,c="red")
         ax.set_title(f"Max: {site}")
+        heatwave_plot = fig
+    
+    elif (method == "min"):
+        print(f"Finding Min hotdays for site {site}.")
+        # Find maximum temperature for each flux day
+        daily_min_temperatures = find_min_temperatures(flux_dates,flux_temperature)
+        # Find moving quantile window for flux data temperature
+        # Default parameters are a window of 15 days and 90th quantile
+        min_temperature_quantiles = moving_window_quantile(
+            dates = historical_dates,
+            measure = historical_temperature,
+            measure_quantile = quantile_threshold,
+            window_length = window_length
+            )
+        # Define hotdays with the maximum temperature quantiles determined
+        # prior as the threshold
+        hotdays = define_hotdays(
+            timeseries_dates = daily_min_temperatures.date,
+            timeseries_temperature = daily_min_temperatures.min_temperature,
+            threshold_month_day = min_temperature_quantiles.month_day,
+            threshold = min_temperature_quantiles.quantiles,
+            comparison = threshold_comparison
+            )
+        
+        # Determine the start and end dates of the heatwaves
+        # Default leniency is 1 gap day per every 8 days of heatwave, with min 
+        # number of 3 consecutive hotdays for a heatwave
+        start_dates, end_dates = find_heatwaves(
+             dates = hotdays.date, 
+             hotdays = hotdays.hotday_indicator,
+             minimum_length = min_heatwave_length, 
+             tolerance = tolerance, 
+             gap_day_window = gap_days_window
+             )
+        
+        # Get the summary of the heatwaves
+        summary = describe_heatwaves(
+            start_dates = start_dates, 
+            end_dates = end_dates, 
+            timeseries_dates = daily_min_temperatures.date, 
+            timeseries_temperature = daily_min_temperatures.min_temperature,
+            historical_dates = historical_dates,
+            historical_temperatures = historical_temperature,
+            method = method
+            )
+        
+        # Get the vector indicator of hot days
+        indicator = get_heatwave_indicator(start_dates = start_dates, 
+                                           end_dates = end_dates, 
+                                           daily_dates = daily_min_temperatures.date
+                                           )
+        # Get the max temperatures associated with each heatwave
+        periods = pd.DataFrame({"date": daily_min_temperatures.date[indicator.heatwave_indicator == 1],
+                                "min_temperature": daily_min_temperatures.min_temperature[indicator.heatwave_indicator == 1]})
+        # Provide a plot of a heatwave
+        fig, ax = plt.subplots()
+        ax.scatter(daily_min_temperatures.date,daily_min_temperatures.min_temperature, s=.5, c='lightgrey')
+        ax.scatter(periods.date,periods.min_temperature,s=.5,c="red")
+        ax.set_title(f"Min: {site}")
         heatwave_plot = fig
         
     # Define heatwaves using the EHF approach

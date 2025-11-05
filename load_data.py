@@ -89,8 +89,6 @@ def loadAMFFile(this_file, measures):
 
 print("All data loading functions loaded.")
 
-# now i need to make a function that loops through each file in a directory and 
-# returns the variables that they all share
 def find_shared_variables(path,measures):
     
     '''
@@ -208,5 +206,134 @@ def check_for_variable(this_file,measures):
     
     # Add the presence absence as a row in the dataframe
     measure_df.loc[0,:] = presence
+    
+    return measure_df
+
+
+def find_shared_variables_longfile(path,measures,column,value,file_type='xslx'):
+    
+    '''
+    Name: find_shared_variables_longfile()
+    Summary: This returns information on variables shared across all AmeriFlux
+            files from a given directory. The main purpose is to identify metadata
+            variables that can be studied when looking at many sites.
+
+    Input: path ~ filepath for directory of AmeriFlux BADM datasets (metadata)
+           measures ~ the variables you want if the files have
+           column ~ the column with the list of variables we want to investigate
+           value ~ the column name with the values associated with above
+           file_type ~ what kind of file it is (AMF BADM is xlsx)
+
+    Output: variable_info ~ dictionary that includes the following information
+                site_presence ~ 0/1 indicator of presence of each variable at each site
+                total_presence ~ how many sites each variable is collected at
+                available_variables ~ variables available at all sites
+                unavailable_variables ~ variables not available at all sites
+    '''
+    try:
+        os.scandir(path) 
+    except FileNotFoundError:
+        print("Thats not a valid filepath, check for error.")
+
+    except NotADirectoryError:
+        # it wasn't a directory that was passed in
+        # but this doesn't yet test if the file exists, fix that!
+        print("Path for a single file was input, please provide a directory.")
+        
+    else:
+        # it was a directory that was passed in, so let's make use of it
+        print('Directory name passed in')
+        
+        # If given a successful directory...
+        # Add site to the column list
+        measures.insert(0,'Site')
+        my_columns = measures
+        # Pull all the filepaths within the directory
+        paths = [
+            f.path for f in os.scandir(path)
+            if f.is_file()
+            and f.name.endswith('.xlsx')
+            and not f.name.startswith('~$')
+            and f.name != '.DS_Store'
+            ]
+
+        
+        merged_data = pd.DataFrame(columns=my_columns)
+        # Loop through each file in the path
+        for this_file in paths:
+            # Retrieve an AmeriFlux dataframe
+            data = check_for_variable_longfile(this_file,column,value,measures,file_type)
+            # Concatenate the data
+            merged_data = pd.concat([merged_data.reset_index(drop=True),
+                         data.reset_index(drop=True)])
+    
+    # Sum how many sites each variable is available at
+    presence_counts = merged_data.sum()
+    presence_counts = presence_counts.drop('Site')
+    # Print some review statements about site counts
+    
+    # Store all this information into a dictionary so that it is readily available
+    variable_info = {}
+    variable_info['site_presence'] = merged_data
+    variable_info['total_presence'] = presence_counts
+    
+    # Make a list of variables that are available at all sites 
+    available_variables = []
+    unavailable_variables = []
+    # Print some information on variable availability
+    for i in range(len(presence_counts)):
+        if (presence_counts[i] == len(merged_data)):
+            available_variables.append(presence_counts.index[i])
+        else:
+            unavailable_variables.append(presence_counts.index[i])
+            
+    variable_info['available_variables'] = available_variables
+    variable_info['unavailable_variables'] = unavailable_variables
+    
+    # Print some statements about what variables you can use
+    print('You have ' + str(len(available_variables)) + ' variables shared across all sites.')
+    
+    #if (len(available_variables) > 0):
+        #print('Variables available at all sites: ' + ', '.join(available_variables)))
+    
+    return variable_info
+    
+
+
+def check_for_variable_longfile(this_file,column,value,measures,file_type='xslx'):
+    if (file_type == 'xslx'):
+        # Pull the site name
+        filename = os.path.basename(this_file)
+        print(filename)
+        site = filename[4:10]
+        print(f"Pulling data for site {site}")
+        # Create a dataframe with the measures as the column names
+        measure_df = pd.DataFrame(columns=measures)
+        # Read in excel file
+        df = pd.read_excel(this_file)
+        # Isolate variable column and its values
+        df = df[[column,value]]
+        # Pivot to wide so that the variables are the columns
+        wide = df.set_index(column).T
+        # Reset the index
+        wide.reset_index(drop=True, inplace=True)
+        # Isolate the columns
+        file_columns = wide.columns
+         
+        # Loop through measures and check if they are present in the columns
+        presence = []
+        for measure in measures:
+            if (measure == "Site"):
+                presence.append(site)
+            elif (measure in file_columns):
+                presence.append(1)
+            else:
+                presence.append(0)
+         
+        # Add the presence absence as a row in the dataframe
+        measure_df.loc[0] = presence
+         
+    else:
+        print("Function doesn't accomodate that kind of file yet.")
     
     return measure_df
