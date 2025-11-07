@@ -322,7 +322,7 @@ def find_heatwaves(hotdays, dates, minimum_length, tolerance, gap_day_window):
 
     # Handle if heatwave goes till end
     if in_heatwave and hotday_count >= minimum_length:
-        end_time = dates[-1]
+        end_time = dates.iloc[-1] if hasattr(dates, "iloc") else dates[-1]
         start_dates.append(start_time)
         end_dates.append(end_time)
         
