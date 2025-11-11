@@ -41,8 +41,9 @@ df.shape
 df.Site.unique()
 len(df.Site.unique())
 df.IGBP.unique()
+
 ###############################################################################
-##                                 Edits                                     ##
+##                        Bad Data Edits                                     ##
 ###############################################################################
 
 # Drop any rows with values that are -9999 (new shape is (190298,11))
@@ -83,31 +84,124 @@ drop_list.extend(df[(df['Site'] == 'US-KFS') & (df['TIMESTAMP'] < '2009-01-01')]
 # Ton days after to 2020-05-01 (drop_list.len == 8997)
 drop_list.extend(df[(df['Site'] == 'US-Ton') & (df['TIMESTAMP'] > "2020-05-01")].index)
 
+# Whs days before 2016
+drop_list.extend(df[(df['Site']=='US-Whs') & (df['TIMESTAMP'] > "2016-01-01")].index)
+
+# Ho1 days before 2008
+drop_list.extend(df[(df['Site']=='US-Ho1') & (df['TIMESTAMP'] < "2008-01-01")].index)
 
 # These are corrections made to cropland (CRO) sites, which have been removed
 # Mo1 days before 2016-01-01 (drop_list.len == 2978)
 # drop_list.extend(df[(df['Site'] == 'US-Mo1') & (df['TIMESTAMP'] < '2016-01-01')].index)
 
-# Drop the drop list! (df.shape == (161011,10))
-df = df.drop(drop_list)
+# Drop the drop list! (df.shape == (159306,10))
+df = df.drop(index=drop_list,errors='ignore')
 
 # Eventually I need to write this to a dataframe, but I'm not sure whats going on 
 # with some of my sites for now.
 
 ###############################################################################
+##                        Replacing SWC Edits                                ##
+###############################################################################
+'''
+The following code selects sites that have bad SWC_F_MDS_1 data and replaces it
+with another depth of SWC. A categorical variables "SWC_depth" is added that indicates
+the depth of SWC value we are using for a given site. So far, this has only been
+useful for site US-Ho1.
+
+At the end of the day, the data for Syv and Kon came out even worse doing this,
+so they are going to be removed. If we need to do this with other sites in the future,
+then we can go ahead and use this code framework to reproduce integrating different
+SWC variables.
+'''
+# Check what SWC variables these three files have
+swc_measures = ["SWC_F_MDS_1","SWC_F_MDS_2","SWC_F_MDS_3","SWC_F_MDS_4","SWC_F_MDS_5",
+                "SWC_F_MDS_1_QC","SWC_F_MDS_2_QC","SWC_F_MDS_3_QC","SWC_F_MDS_4_QC",
+                "SWC_F_MDS_5_QC"]
+
+shared_swc = find_shared_variables('/Users/marleeyork/Documents/project2/data/AMFdataDD',swc_measures)
+site_presence = shared_swc['site_presence']
+site_presence[site_presence['Site'].isin(['US-Ho1','US-Syv','US-Kon'])]
+
+# Find filepaths for for US-Ho1, US-Syv, and US-Kon
+Ho1_path = "/Users/marleeyork/Documents/project2/data/AMFdataDD/AMF_US-Ho1_FLUXNET_SUBSET_DD_1996-2023_3-6.csv"
+Kon_path = "/Users/marleeyork/Documents/project2/data/AMFdataDD/AMF_US-Kon_FLUXNET_SUBSET_DD_2004-2019_5-7.csv"
+Syv_path = "/Users/marleeyork/Documents/project2/data/AMFdataDD/AMF_US-Syv_FLUXNET_SUBSET_DD_2001-2023_4-6.csv"
+
+# Load in the dataset with all SWC variables of interest (starting with SWC_F_MDS_2 for now)
+Ho1_SWC = loadAMFFile(this_file=Ho1_path, measures=["TIMESTAMP","SWC_F_MDS_2"])
+Kon_SWC = loadAMFFile(this_file=Kon_path,measures=["TIMESTAMP","SWC_F_MDS_2"])
+Syv_SWC = loadAMFFile(this_file=Syv_path,measures=["TIMESTAMP","SWC_F_MDS_3"])
+
+# Add site label to each
+Ho1_SWC['Site'] = ['US-Ho1'] * Ho1_SWC.shape[0]
+Kon_SWC['Site'] = ['US-Kon'] * Kon_SWC.shape[0]
+Syv_SWC['Site'] = ['US-Syv'] * Syv_SWC.shape[0]
+
+# Concatenate these into one dataframe
+swc2_data = pd.concat([Ho1_SWC,Kon_SWC])
+swc3_data = Syv_SWC
+
+# Create two other dataframes for sites with the other two depths of soil water data
+df_swc = df[df['Site'].isin(['US-Ho1','US-Kon'])]
+df_swc_Syv = df[df['Site'].isin(['US-Syv'])]
+
+# Merge the two dataframes together
+df_swc = pd.merge(df_swc,swc2_data,on=['Site','TIMESTAMP'],how='inner')
+df_swc_Syv = pd.merge(df_swc_Syv,swc3_data,on=['Site','TIMESTAMP'],how='inner')
+
+# Adding a categorical variable that is soil water depth we are going to use for that site
+df_swc['SWC_depth'] = ['2'] * df_swc.shape[0]
+df_swc_Syv['SWC_depth'] = ['3'] * df_swc_Syv.shape[0]
+
+# Remove these 3 sites from the overall dataframe
+df = df[~df['Site'].isin(['US-Ho1','US-Kon','US-Syv'])]
+
+# Add a soil water depth identifier
+df['SWC_depth'] = ['1'] * df.shape[0]
+
+# Remove SWC_F_MDS_1 from the 3 problem sites df
+df_swc = df_swc.drop(columns=['SWC_F_MDS_1'])
+df_swc_Syv = df_swc_Syv.drop(columns=['SWC_F_MDS_1'])
+
+# Rename the SWC variables to a neutral name
+df = df.rename(columns={'SWC_F_MDS_1':'SWC'})
+df_swc = df_swc.rename(columns={'SWC_F_MDS_2': 'SWC'})
+df_swc_Syv = df_swc_Syv.rename(columns={'SWC_F_MDS_3':'SWC'})
+
+# Check that all the columns align
+df_swc.columns.isin(df.columns)
+df.columns.isin(df_swc.columns)
+df_swc.columns.isin(df_swc_Syv.columns)
+df.columns.isin(df_swc_Syv.columns)
+df_swc_Syv.columns.isin(df.columns)
+df_swc_Syv.columns.isin(df_swc.columns)
+
+# Concatenate the two dataframes
+df = pd.concat([df,df_swc,df_swc_Syv])
+
+# Removing Syv and Kon since these other SWC values did not help
+df = df[~df['Site'].isin(['US-Kon','US-Syv'])]
+
+
+###############################################################################
 ##                                  QAQC                                     ##
 ###############################################################################
+'''
+The following code will plot timeseries of important variables to investigate
+any issues in the data, or sites that need to be dropped.
+'''
 vars_to_plot = [
     "TA_F",
     "SW_IN_F",
     "VPD_F",
     "P_F",
-    "SWC_F_MDS_1",
+    "SWC",
     "GPP_NT_VUT_REF"
 ]
 
 for site in df.Site.unique():
-    flux_data = df[df['Site']==site]
+    flux_data = df[(df['Site']==site)]
     fig, ax = plt.subplots(3, 2, figsize=(10, 8))
     ax = ax.flatten()
 
@@ -126,7 +220,79 @@ for site in df.Site.unique():
     input("Press [Enter] to continue...")
     
 ###############################################################################
-##                       TEMPERATURE CHECKS                                  ##
+##                         TEMPERATURE QC CHECK                              ##
+###############################################################################
+'''
+The following code will investigate the quality of temperature data, especially
+that of the highest 95th percentile for each day.
+'''
+# This confirms that the QAQC for daily temperature is available at all our sites
+shared_tempQAQC = find_shared_variables('/Users/marleeyork/Documents/project2/data/AMFdataDD',measures=['TA_F_QC'])
+print(shared_tempQAQC['available_variables'])
+
+# This confirms that the QAQC for hourly temperature is available at all our sites
+shared_tempQAQC_hourly = find_shared_variables('/Users/marleeyork/Documents/project2/data/AMFdata_HH',measures=['TA_F_QC'])
+print(shared_tempQAQC_hourly['available_variables'])
+
+# Download the daily temperature and QAQC variables
+ta = loadAMF(path = "/Users/marleeyork/Documents/project2/data/AMFdataDD",measures=['TIMESTAMP','TA_F','TA_F_QC'])
+ta_H = loadAMF(path = "/Users/marleeyork/Documents/project2/data/AMFdata_HH",measures=['TIMESTAMP_START','TA_F','TA_F_QC'])
+
+# Remove any observations not in df
+df_obs = df[['Site','TIMESTAMP']]
+ta = pd.merge(df_obs,ta,on=['Site','TIMESTAMP'],how='inner')
+
+# Looking at the observations with a quality control flag
+QAQC_counts = ta.groupby('Site')['TA_F_QC'].apply(lambda x: (x < .5).sum())
+print(QAQC_counts)
+
+QAQC_counts_hourly = ta_H.groupby(['Site'])['TA_F_QC'].apply(lambda x: (x < .5).sum())
+print(QAQC_counts_hourly)
+
+# Adding a month variable to see if there a certain time of the year that is an issue
+ta['Month'] = ta.TIMESTAMP.dt.month
+ta_H['Month'] = ta_H.TIMESTAMP_START.dt.month
+
+# Grouping again, but this time by site and month
+QAQC_counts = ta.groupby(['Site','Month'])['TA_F_QC'].apply(lambda x: (x < .5).sum())
+with pd.option_context('display.max_rows', None):
+    print(QAQC_counts)
+
+QAQC_counts_hourly = ta_H.groupby(['Site','Month'])['TA_F_QC'].apply(lambda x: (x < .5).sum())
+with pd.option_context('display.max_rows', None):
+    print(QAQC_counts_hourly)
+
+
+# Create label of quality control
+TA_QAQC = []
+for value in ta.TA_F_QC:
+    if (value < .5):
+        TA_QAQC.append(1)
+    else:
+        TA_QAQC.append(0)
+        
+ta['TA_flag'] = TA_QAQC
+
+# Plotting temperature timeseries with daily QAQC flag to see if they are continuous
+import matplotlib.pyplot as plt
+
+colors = {'0': 'blue', '1':'red'}
+
+for site in ta.Site.unique():
+    flux_data = ta[(ta['Site']==site)]
+    flux_data['TA_flag'] = flux_data['TA_flag'].astype("str")
+    fig, ax = plt.subplots()
+    
+    plt.scatter(flux_data.TIMESTAMP,flux_data.TA_F,c=flux_data.TA_flag.map(colors),s=.5)
+    plt.title(site)
+
+    plt.tight_layout()
+    plt.show()
+    
+    input("Press [Enter] to continue...")
+
+###############################################################################
+##                   MAXIMUM TEMPERATURE CHECKS                              ##
 ###############################################################################
 
 # Comparing max temperature PRISM to AmeriFlux
@@ -227,10 +393,12 @@ for site in df_max.Site.unique():
     
 # Plotting the AMF and PRISM 95th moving quantiles
 fig, ax = plt.subplots()
-sb.lmplot(x='AMF_quantiles', y='PRISM_quantiles', data=daily_quantiles[daily_quantiles['Site']=='US-Mo2'], hue='Site', fit_reg=False)
+sb.lmplot(x='AMF_quantiles', y='PRISM_quantiles', data=daily_quantiles, hue='Site', fit_reg=False)
 plt.show()
 
 # Checking the above to see if its a certain month or season we should be worried about
+# It is consistently these October/November 95th quantile temperatures that
+# are very different.
 KFS_quantiles = daily_quantiles[daily_quantiles['Site']=='US-KFS']
 KFS_quantiles.month_day = pd.to_datetime(KFS_quantiles.month_day,format='%m-%d')
 fig, ax = plt.subplots()
@@ -244,6 +412,7 @@ fig, ax = plt.subplots()
 plt.scatter(Mo2_quantiles.month_day, Mo2_quantiles.AMF_quantiles,c='red',s=.5)
 plt.scatter(Mo2_quantiles.month_day, Mo2_quantiles.PRISM_quantiles,c='blue',s=.5)
 plt.show()
+
 
 
 
