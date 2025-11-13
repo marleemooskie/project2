@@ -15,6 +15,7 @@ Also, we need PRISM data for Canada too.
 import os
 os.chdir("/Users/marleeyork/Documents/project2")
 from load_data import *
+from heatwave_QAQC import *
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.pyplot as plt
@@ -29,6 +30,10 @@ df = loadAMF(path='/Users/marleeyork/Documents/project2/data/AMFdataDD',
 
 df_hourly = loadAMF(path='/Users/marleeyork/Documents/project2/data/AMFdata_HH',
                  measures=['TIMESTAMP_START','TA_F'])
+
+# Loading in historical mean data from PRISM
+# Need to include Canada data with this eventually
+historical_tmean = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/extracted_daily_tmean.csv")
 
 # Load the IGBP data and merge to df
 site_data = pd.read_csv("/Users/marleeyork/Documents/project2/data/site_list.csv",encoding='latin1')
@@ -238,6 +243,10 @@ print(shared_tempQAQC_hourly['available_variables'])
 ta = loadAMF(path = "/Users/marleeyork/Documents/project2/data/AMFdataDD",measures=['TIMESTAMP','TA_F','TA_F_QC'])
 ta_H = loadAMF(path = "/Users/marleeyork/Documents/project2/data/AMFdata_HH",measures=['TIMESTAMP_START','TA_F','TA_F_QC'])
 
+# Loading in the heatwaves so that I may see if any of them are defined by these low QAQC days
+os.chdir("/Users/marleeyork/Documents/project2/heatwave_definition/")
+from testing_heatwaves import *
+
 # Remove any observations not in df
 df_obs = df[['Site','TIMESTAMP']]
 ta = pd.merge(df_obs,ta,on=['Site','TIMESTAMP'],how='inner')
@@ -291,6 +300,81 @@ for site in ta.Site.unique():
     
     input("Press [Enter] to continue...")
 
+# Comparing low QAQC temperature days with PRISM temperature
+# Merge PRISM data with daily temperature data
+tmean_long = pd.melt(historical_tmean,
+                     id_vars='date',
+                     var_name = 'Site',
+                     value_name = 'Tmean_PRISM'
+                     )
+
+tmean_long.date = pd.to_datetime(tmean_long.date)
+tmean_long.columns = ['TIMESTAMP','Site','Tmean_PRISM']
+
+# Merge AmeriFlux data with PRISM data
+ta = pd.merge(ta,tmean_long,on=['Site','TIMESTAMP'],how='inner')
+
+# Unpack hotdays from heatwaves_EHF
+# Since this QAQC is looking at average daily temperature, I am only starting
+# with the EHF heatwaves
+heatwave_indicator_EHF = pd.DataFrame(columns=['date','heatwave_indicator','Site'])
+for site in ta.Site.unique():
+    site_heatwaves = heatwaves_EHF[site]['indicator']
+    site_heatwaves['Site'] = [site] * site_heatwaves.shape[0]
+    heatwave_indicator_EHF = pd.concat([heatwave_indicator_EHF,site_heatwaves])
+heatwave_indicator_EHF.columns = ['TIMESTAMP','heatwave_indicator','Site']
+# Merge heatwave indicator onto the temperature QAQC data
+ta = pd.merge(ta,heatwave_indicator_EHF,on=['Site','TIMESTAMP'])
+
+# Plotting QAQC flagged days by site
+# This is excluding any Canada and Alaska sites for now
+flagged_ta = ta[ta['TA_flag']==1]
+flagged_ta = flagged_ta[flagged_ta['Tmean_PRISM']!=-9999]
+
+site_cat = flagged_ta['Site'].unique()
+colors = plt.cm.tab10(range(len(site_cat))) 
+color_map = dict(zip(site_cat, colors))
+
+fig, ax = plt.subplots()
+for site in site_cat:
+    subset = flagged_ta[flagged_ta['Site'] == site]
+    plt.scatter(subset['TA_F'], subset['Tmean_PRISM'], color=color_map[site], label=site,s=.7,alpha=.5)
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.xlabel("AMF Daily Avg Temperature")
+plt.ylabel("PRISM Daily Avg Temperature")
+plt.show()
+
+# Plotting QAQC flagged days by whether or not they are in a heatwave
+heatwave_cat = flagged_ta['heatwave_indicator'].unique()
+colors_heatwave = plt.cm.tab10(range(len(heatwave_cat)))
+color_heatwave_map = dict(zip(heatwave_cat,colors_heatwave))
+
+fig, ax = plt.subplots()
+for presence in heatwave_cat:
+    subset = flagged_ta[flagged_ta['heatwave_indicator'] == presence]
+    plt.scatter(subset['TA_F'], subset['Tmean_PRISM'], color = color_heatwave_map[presence], label=presence, s=.7, alpha=.5)
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.xlabel("AMF Daily Avg Temperature")
+plt.ylabel("PRISM Daily Avg Temperature")
+plt.show()
+
+# Finding those heatwaves that are invalid due to too much low quality temperature data
+heatwave_QAQC = pd.DataFrame(columns=['start_date','end_date','QAQC_percentage','heatwave_invalidity','Site'])
+for site in heatwaves_EHF.keys():
+    print(site)
+    site_qaqc = avg_QAQC_check(site_heatwave_dictionary = heatwaves_EHF[site],
+                               dates = ta[ta['Site']==site].TIMESTAMP,
+                               TA_QAQC = ta[ta['Site']==site].TA_F_QC,
+                               QAQC_threshold = .5,
+                               heatwave_threshold = .75
+                               )
+    site_qaqc['Site'] = [site] * site_qaqc.shape[0]
+    heatwave_QAQC = pd.concat([heatwave_QAQC,site_qaqc])
+    
+    
+    
+
+# Running QAQC heatwave check to explore heatwaves that do not pass quality checks
 ###############################################################################
 ##                   MAXIMUM TEMPERATURE CHECKS                              ##
 ###############################################################################
