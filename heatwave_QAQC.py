@@ -50,19 +50,19 @@ def avg_QAQC_check(site_heatwave_dictionary, dates, TA_QAQC, QAQC_threshold,
                 QAQC_flag.append(1)
             else:
                 QAQC_flag.append(0)
-        print(start)
-        print(end)
-        print(heatwave_QAQC_values)
-        print(QAQC_flag)
-        # Find percentage of flagged days
-        QAQC_percentage = sum(QAQC_flag) / len(QAQC_flag)
-        invalidity_flag = 0 if (QAQC_percentage < heatwave_threshold) else 1
-        # Add start date, end date, percentage of bad data days, and heatwave validity to dataframe
-        this_site = pd.DataFrame({'start_date':[start],
+        
+        if len(QAQC_flag) == 0:
+            continue
+        else:
+            # Find percentage of flagged days
+            QAQC_percentage = sum(QAQC_flag) / len(QAQC_flag)
+            invalidity_flag = 0 if (QAQC_percentage < heatwave_threshold) else 1
+            # Add start date, end date, percentage of bad data days, and heatwave validity to dataframe
+            this_site = pd.DataFrame({'start_date':[start],
                                   'end_date':[end],
                                   'QAQC_percentage':[QAQC_percentage],
                                   'heatwave_invalidity':[invalidity_flag]})
-        # Concatenate with QAQC of other heatwaves
-        heatwave_qaqc = pd.concat([heatwave_qaqc,this_site])
+            # Concatenate with QAQC of other heatwaves
+            heatwave_qaqc = pd.concat([heatwave_qaqc,this_site])
     return heatwave_qaqc
 
