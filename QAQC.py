@@ -65,7 +65,6 @@ print(shared_tempQAQC_hourly['available_variables'])
 
 # Download the daily temperature and QAQC variables
 ta = loadAMF(path = "/Users/marleeyork/Documents/project2/data/AMFdataDD",measures=['TIMESTAMP','TA_F','TA_F_QC'])
-ta_H = loadAMF(path = "/Users/marleeyork/Documents/project2/data/AMFdata_HH",measures=['TIMESTAMP_START','TA_F','TA_F_QC'])
 
 # Loading in the heatwaves so that I may see if any of them are defined by these low QAQC days
 # This will load in 3 dictionaries: heatwaves, heatwaves_EHF, and heatwaves_min
@@ -266,6 +265,7 @@ df_max = pd.merge(AMF_max, df_max, on=['Site','date'])
 # Lets look at the overall correlation between the PRISM and AmeriFlux data now
 fig, ax = plt.subplots()
 plt.scatter(df_max.max_temperature,df_max.max_PRISM, s=.5,alpha=.1)
+plt.plot([-30, 50], [-30, 50], '--',c='red')
 plt.xlabel("AMF Max Temperature")
 plt.ylabel("PRISM Max Temperature")
 plt.show()
@@ -329,6 +329,12 @@ fig, ax = plt.subplots()
 plt.scatter(Mo2_quantiles.month_day, Mo2_quantiles.AMF_quantiles,c='red',s=.5)
 plt.scatter(Mo2_quantiles.month_day, Mo2_quantiles.PRISM_quantiles,c='blue',s=.5)
 plt.show()
+
+# Unpacking the heatwaves
+
+for site in heatwaves.keys():
+    site_heatwaves = heatwaves[site]['periods']
+    site_heatwaves['Site'] = [site] * 
 
 
 
