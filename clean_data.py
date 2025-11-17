@@ -92,9 +92,23 @@ drop_list.extend(df[(df['Site']=='US-Ho1') & (df['TIMESTAMP'] < "2008-01-01")].i
 # Drop the drop list! (df.shape == (159306,10))
 df = df.drop(index=drop_list,errors='ignore')
 
-# Eventually I need to write this to a dataframe, but I'm not sure whats going on 
-# with some of my sites for now.
+# Now we need to create a date column in the hourly data that has the timestamp removed
+df_hourly['TIMESTAMP'] = df_hourly['TIMESTAMP_START'].dt.strftime("%-Y-%-m-%d")
+df_hourly['TIMESTAMP'] = pd.to_datetime(df_hourly['TIMESTAMP'])
 
+# Initialize new dataframe
+df_HH = pd.DataFrame(columns=['TIMESTAMP_START','TA_F','Site'])
+# Loop through each site
+for site in df_hourly.Site.unique():
+    # Find all the dates in the daily data for that site
+    dates = df[df['Site']==site]['TIMESTAMP']
+    # Isolate these dates in the half hourly data
+    site_keep = df_hourly[(df_hourly['Site']==site) & (df_hourly['TIMESTAMP'].isin(dates))]
+    # Add these days to the dataframe
+    df_HH = pd.concat([df_HH,site_keep[['TIMESTAMP_START','TA_F','Site']]])
+    
+# USE df_HH FOR ALL HOURLY ANALYSIS
+    
 ###############################################################################
 ##                        Replacing SWC Edits                                ##
 ###############################################################################
