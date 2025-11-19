@@ -9,8 +9,7 @@ Heatwaves can fall into the following criteria:
     6. Min and max --> day-night spike heatwave
     7. Min, max, and average --> triad heatwave
 '''
-
-from testing_heatwaves import *
+import pandas as pd
 
 # Provided 3 dictionaries for the heawaves, return a category of what each 
 # day belongs to 
@@ -65,10 +64,11 @@ def find_heatwave_overlap(min_heatwaves, max_heatwaves, avg_heatwaves):
             final_heatwaves[site]['start_dates'] = start_dates
             final_heatwaves[site]['end_dates'] = end_dates
             
-            # Find the composition of categories for each heatwave
-            
-            
-            
+            # Find the heatwave type with the highest composition 
+            # This currently does not consider if there are multiple with the same percentage of one heatwave type
+            top_heatwave = calc_top_heatwave(start_dates,end_dates,indicator_df.date,indicator_df.heatwave_categories)
+            final_heatwaves[site]['heatwave_type'] = top_heatwave
+            final_heatwaves[site]['heatwave_type_counts'] = top_heatwave.top_heatwave.value_counts()
         
     else:
         print("Heatwaves are fit to different sites, check your data.")
@@ -170,21 +170,61 @@ def find_consecutive_runs(df, date_col, flag_col):
     return start_dates, end_dates
 
 
-def calc_heatwave_composition(start_dates, end_dates, dates, heatwave_categories):
-    
-    heatwave_df = pd.DataFrame({'dates':dates,'heatwave_category':heatwave_categories})
-    # Get range of dates for a given heatwave
+def calc_top_heatwave(start_dates, end_dates, dates, heatwave_categories):
+
+    # --- priority ranking: lower = higher priority ---
+    priority = {
+        'Triad': 1,
+        'Day-Night Spike': 2,
+        'Day-intensified': 3,
+        'Night-intensified': 4,
+        'Overall': 5,
+        'Day': 6,
+        'Night': 7
+    }
+
+    heatwave_df = pd.DataFrame({
+        'dates': dates,
+        'heatwave_category': heatwave_categories
+    })
+
+    heatwave_type = []
+
     for start, end in zip(start_dates, end_dates):
         date_range = pd.date_range(start, end)
-        # Isolate those dates in the heatwaves categories
+
         this_heatwave = heatwave_df[heatwave_df['dates'].isin(date_range)]
-        # Groupby the category and get counts
-        this_heatwave.groupby('heatwave_category').count()
-        # Now I need to make this into a dataframe, calculate the percentages, store it into the dictionary, and return the highest percentage category
-        
-        
-    
-    return heatwave_composition
+
+        pct = (
+            this_heatwave
+                .groupby('heatwave_category')
+                .size()
+                .div(len(this_heatwave))
+                .mul(100)
+                .reset_index(name='percent')
+        )
+
+        # Add priority column
+        pct['priority'] = pct['heatwave_category'].map(priority)
+
+        # Sort by:
+        # 1️⃣ highest percent
+        # 2️⃣ lowest priority number
+        pct = pct.sort_values(
+            by=['percent', 'priority'],
+            ascending=[False, True]
+        )
+
+        # Select the top category after sorting
+        top_heatwave = pct.iloc[0]['heatwave_category']
+        heatwave_type.append(top_heatwave)
+
+    return pd.DataFrame({
+        'start_dates': start_dates,
+        'end_dates': end_dates,
+        'top_heatwave': heatwave_type
+    })
+
 
 
 

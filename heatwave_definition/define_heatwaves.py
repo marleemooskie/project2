@@ -915,6 +915,7 @@ def calculate_moisture(timeseries_dates,timeseries_moisture,start_dates,end_date
     '''
     moisture_averages = []
     moisture_totals = []
+    moisture_variability = []
     # Loop through each heatwave
     for start, end in zip(start_dates, end_dates):
         # Create date range for the heatwave
@@ -926,18 +927,22 @@ def calculate_moisture(timeseries_dates,timeseries_moisture,start_dates,end_date
             # Calculate average moisture
             average = sum(moisture) / len(moisture)
             total = sum(moisture)
+            variability = np.std(moisture)
+            print(f'Variability: {variability}')
             # Add to list of heatwave moisture averages
         else:
             average = pd.NA
             total = pd.NA
+            moisture = pd.NA
         moisture_averages.append(average)
         moisture_totals.append(total)
-        
+        moisture_variability.append(variability)
     
     heatwave_moisture = pd.DataFrame({'start_date':list(start_dates),
                                       'end_date':list(end_dates),
                                       'moisture_average':list(moisture_averages),
-                                      'moisture_total':list(moisture_totals)
+                                      'moisture_total':list(moisture_totals),
+                                      'moisture_variability':list(moisture_variability)
                                       })
     
     return heatwave_moisture

@@ -84,16 +84,11 @@ print(QAQC_counts_hourly)
 
 # Adding a month variable to see if there a certain time of the year that is an issue
 ta['Month'] = ta.TIMESTAMP.dt.month
-ta_H['Month'] = ta_H.TIMESTAMP_START.dt.month
 
 # Grouping again, but this time by site and month
 QAQC_counts = ta.groupby(['Site','Month'])['TA_F_QC'].apply(lambda x: (x < .5).sum())
 with pd.option_context('display.max_rows', None):
     print(QAQC_counts)
-
-QAQC_counts_hourly = ta_H.groupby(['Site','Month'])['TA_F_QC'].apply(lambda x: (x < .5).sum())
-with pd.option_context('display.max_rows', None):
-    print(QAQC_counts_hourly)
 
 
 # Create label of quality control
@@ -311,6 +306,7 @@ for site in df_max.Site.unique():
 # Plotting the AMF and PRISM 95th moving quantiles
 fig, ax = plt.subplots()
 sb.lmplot(x='AMF_quantiles', y='PRISM_quantiles', data=daily_quantiles, hue='Site', fit_reg=False)
+plt.plot([0, 40], [0,40], '--',c='black')
 plt.show()
 
 # Checking the above to see if its a certain month or season we should be worried about
@@ -321,6 +317,7 @@ KFS_quantiles.month_day = pd.to_datetime(KFS_quantiles.month_day,format='%m-%d')
 fig, ax = plt.subplots()
 plt.scatter(KFS_quantiles.month_day, KFS_quantiles.AMF_quantiles,c='red',s=.5)
 plt.scatter(KFS_quantiles.month_day, KFS_quantiles.PRISM_quantiles,c='blue',s=.5)
+plt.title("Historical Daily 95th Quantile for US-KFS")
 plt.show()
 
 Mo2_quantiles = daily_quantiles[daily_quantiles['Site']=='US-Mo2']
@@ -328,13 +325,10 @@ Mo2_quantiles.month_day = pd.to_datetime(Mo2_quantiles.month_day,format='%m-%d')
 fig, ax = plt.subplots()
 plt.scatter(Mo2_quantiles.month_day, Mo2_quantiles.AMF_quantiles,c='red',s=.5)
 plt.scatter(Mo2_quantiles.month_day, Mo2_quantiles.PRISM_quantiles,c='blue',s=.5)
+plt.title("Historical Daily 95th Quantile for US-Mo2")
 plt.show()
 
-# Unpacking the heatwaves
 
-for site in heatwaves.keys():
-    site_heatwaves = heatwaves[site]['periods']
-    site_heatwaves['Site'] = [site] * 
 
 
 
