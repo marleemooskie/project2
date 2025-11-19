@@ -3,6 +3,7 @@ This script includes functions that check the quality of heatwaves based on
 the AmeriFlux QAQC temperature flags.
 '''
 import pandas as pd
+from define_heatwaves import *
 
 def avg_QAQC_check(site_heatwave_dictionary, dates, TA_QAQC, QAQC_threshold,
                    heatwave_threshold):
@@ -66,7 +67,7 @@ def avg_QAQC_check(site_heatwave_dictionary, dates, TA_QAQC, QAQC_threshold,
             heatwave_qaqc = pd.concat([heatwave_qaqc,this_site])
     return heatwave_qaqc
 
-def minmax_QAQC_check(site_heatwave_dictionary, dates, TA, TA_QAQC, heatwave_threshold):
+def minmax_QAQC_check(site_heatwave_dictionary, dates, TA, TA_QAQC, heatwave_threshold,method='max'):
     '''
     Description
     -----------
@@ -80,18 +81,22 @@ def minmax_QAQC_check(site_heatwave_dictionary, dates, TA, TA_QAQC, heatwave_thr
     
     Parameters
     ----------
-    site_heatwave_dictionary : TYPE
+    site_heatwave_dictionary : DICTIONARY
         DESCRIPTION. Dictionary provided by fit_heatwaves with method="EHF" for
         one site. E.g. site_heatwave_dictionary = heatwaves_EHF['US-GLE']
-    dates : TYPE
+    dates : datetime vector
         DESCRIPTION. Dates for AmeriFlux data associated with the following QAQC values.
-    TA_QAQC : TYPE
+    TA_QAQC : float vector
         DESCRIPTION. TA_F_QAQC values associated with the above dates for one given site.
-    QAQC_threshold : TYPE
+    QAQC_threshold : float decimal [0,1]
         DESCRIPTION. The bottom TA_F_QAQC threshold that determines a day of inacceptable data.
-    heatwave_threshold : TYPE
+    heatwave_threshold : float decimal [0,1]
         DESCRIPTION. The percentage of inacceptable data days a heatwave can have and 
         still be considered a valid heatwave.
+    method : string ['max' or 'min']
+        DESCRIPTION. Specifies whether this is being used on heatwaves defined by
+        maximum or minimum daily temperatures
+    
     Returns
     -------
     heatwave_qaqc : TYPE
@@ -106,45 +111,185 @@ def minmax_QAQC_check(site_heatwave_dictionary, dates, TA, TA_QAQC, heatwave_thr
     hourly_TA['dates_dt'] = pd.to_datetime(hourly_TA['dates'].dt.date)
     
     # Loop through each heatwave
-    df = site_heatwave_dictionary['summary']
-    for i in range(df.shape[0]):
-        # Isolate a heatwave
-        this_heatwave = df.iloc[0]
-        # Retrieve the dates for a given heatwave
-        this_heatwave_dates = pd.date_range(this_heatwave.start_dates, this_heatwave.end_dates)
-        # Find temperatures and QAQC for this heatwave
-        this_heatwave_hourly = hourly_TA[hourly_TA['dates_dt'].isin(this_heatwave_dates)]
-        # Get the max temperature for the heatwave days
-        max_temperatures = find_max_temperatures(this_heatwave_hourly.dates, this_heatwave_hourly.TA)
+    data = site_heatwave_dictionary['summary']
+    for i in range(data.shape[0]):
+    
+        # Get the ith heatwave — this was the major bug
+        this_heatwave = data.iloc[i]
+
+        # Build the list of dates in the heatwave
+        this_heatwave_dates = pd.date_range(
+            this_heatwave.start_dates, 
+            this_heatwave.end_dates
+            )
+
+        # Extract hourly records in those dates
+        this_heatwave_hourly = hourly_TA[
+            hourly_TA['dates_dt'].isin(this_heatwave_dates)
+            ]
     
         downscaled = []
-        # Get the QAQC associated with that temperature
-        for j in range(max_temperatures.shape[0]):
-            # Isolate the date we are looking at
-            this_date = max_temperatures.iloc[j]['date']
-            this_date = pd.to_datetime(pd.to_datetime(this_date).date())
-            # Isolate what was found as the maximum temperature for that day
-            this_temperature = max_temperatures.iloc[j]['max_temperature']
-            # Find the hour of the day that the maximum temperature came from
-            max_hour = this_heatwave_hourly[(this_heatwave_hourly['dates_dt']==this_date) 
-                                            & (this_heatwave_hourly['TA']==this_temperature)]
-            # Check the QAQC for that day
-            qaqc = list(max_hour['TA_QAQC'])
-            # Check if it is gap-filled
-            if (qaqc[0]==2):
-                downscaled.append(1)
+
+        for date in this_heatwave_dates:
+
+            # Subset hourly data for the date
+            daily_hourly = this_heatwave_hourly[
+                this_heatwave_hourly['dates_dt'] == date
+                ]
+
+            if len(daily_hourly) == 0:
+                # Handle empty day
+                downscaled.append(1)   # or whatever logic makes sense
+                continue
+        
+            # Identify the hour with the max/min temperature
+            if method == 'max':
+                idx = daily_hourly['TA'].idxmax()
             else:
-                downscaled.append(0)
-    
-        # Calculate the percentage of the heatwave that is based on downscaled data
+                idx = daily_hourly['TA'].idxmin()
+        
+            qaqc = daily_hourly.loc[idx, 'TA_QAQC']
+
+            # Mark whether gap filled based on QC coding
+            downscaled.append(1 if qaqc == 2 else 0)
+
         heatwave_percentage = sum(downscaled) / len(downscaled)
-        fail = 0 if (heatwave_percentage < heatwave_threshold) else 1
+        fail = 1 if heatwave_percentage >= heatwave_threshold else 0
+
         flag.append(fail)
+
     # Merge this onto the heatwave summary
-    df['QAQC_flag'] = flag
+    data['QAQC_flag'] = flag
     # If it is bad, then flag it as bad
-    heatwave_qaqc = df
+    heatwave_qaqc = data
     
     return heatwave_qaqc
+
+
+
+def remove_invalid_heatwaves(heatwaves_dictionary, invalid_heatwaves):
+    '''
+    Parameters
+    ----------
+    heatwave_dictionary : Dictionary
+        DESCRIPTION. The heatwave dictionary for all site.
+    invalid_heatwaves : DataFrame
+        DESCRIPTION. DataFrame of invalid heatwaves with columns=['Site','start_dates','end_dates']
+
+    Returns
+    -------
+    site_heatwave_dictionary : TYPE
+        DESCRIPTION. Heatwave dictionary returned with the invalid heatwaves removed.
+
+    '''
+    # Remove these invalid heatwaves from the list of heatwaves
+    for site in invalid_heatwaves.Site.unique():
+        print(f"Cleaning up site {site}...")
+        # Isolate invalid heatwaves for that site
+        site_invalid = invalid_heatwaves[invalid_heatwaves['Site']==site]
+        # Loop through the 
+        for i in range(site_invalid.shape[0]):
+            invalid_heatwave = site_invalid.iloc[i]
+            print(f"Removing invalid heatwave {invalid_heatwave}.")
+            # Drop the invalid from the start date
+            heatwaves_dictionary[site]['start_dates'] = [
+                d for d in heatwaves_dictionary[site]['start_dates']
+                if d != invalid_heatwave.start_date
+                ]
+            # Drop the invalid from the end date
+            heatwaves_dictionary[site]['end_dates'] = [
+                d for d in heatwaves_dictionary[site]['end_dates']
+                if d != invalid_heatwave.end_date
+                ]
+            # Drop the invalid from the summary
+            data = heatwaves_dictionary[site]['summary']
+            heatwaves_dictionary[site]['summary'] = data[
+                data['start_dates'] != invalid_heatwave.start_date
+                ].reset_index(drop=True)
+            # Change the indicator values to 0 at these invalid heatwaves
+            data = heatwaves_dictionary[site]['indicator']
+            mask = (data['date'] >= invalid_heatwave.start_date) & \
+                   (data['date'] <= invalid_heatwave.end_date)
+            data.loc[mask, 'avg_indicator'] = 0
+            heatwaves_dictionary[site]['indicator'] = data
+            # Remove these same dates from periods
+            data = heatwaves_dictionary[site]['periods']
+            mask = (data['date'] >= invalid_heatwave.start_date) & \
+                   (data['date'] <= invalid_heatwave.end_date)
+            heatwaves_dictionary[site]['periods'] = heatwaves_dictionary[site]['periods'][~mask]
+            # Remove the invalid heatwave dates from precip
+            data = heatwaves_dictionary[site]['precip']
+            mask = (data['start_date'] == invalid_heatwave.start_date) & \
+                   (data['end_date'] == invalid_heatwave.end_date)
+            heatwaves_dictionary[site]['precip'] = heatwaves_dictionary[site]['precip'][~mask]
+            # Remove the invalid heatwave dates from swc
+            data = heatwaves_dictionary[site]['swc']
+            mask = (data['start_date'] == invalid_heatwave.start_date) & \
+                   (data['end_date'] == invalid_heatwave.end_date)
+            heatwaves_dictionary[site]['swc'] = heatwaves_dictionary[site]['swc'][~mask]
+    
+    return heatwaves_dictionary
+
+
+# Remove these invalid heatwaves from the list of heatwaves
+for site in invalid_heatwaves.Site.unique():
+    print(f"Cleaning up site {site}...")
+    # Isolate invalid heatwaves for that site
+    site_invalid = invalid_heatwaves[invalid_heatwaves['Site']==site]
+    # Loop through the 
+    for i in range(site_invalid.shape[0]):
+        invalid_heatwave = site_invalid.iloc[i]
+        print(f"Removing invalid heatwave {invalid_heatwave}.")
+        # Drop the invalid from the start date
+        heatwaves_EHF[site]['start_dates'] = [
+            d for d in heatwaves_EHF[site]['start_dates']
+            if d != invalid_heatwave.start_date
+            ]
+        # Drop the invalid from the end date
+        heatwaves_EHF[site]['end_dates'] = [
+            d for d in heatwaves_EHF[site]['end_dates']
+            if d != invalid_heatwave.end_date
+            ]
+        # Drop the invalid from the summary
+        data = heatwaves_EHF[site]['summary']
+        heatwaves_EHF[site]['summary'] = data[
+            data['start_dates'] != invalid_heatwave.start_date
+            ].reset_index(drop=True)
+        # Change the indicator values to 0 at these invalid heatwaves
+        data = heatwaves_EHF[site]['indicator']
+        mask = (data['date'] >= invalid_heatwave.start_date) & \
+               (data['date'] <= invalid_heatwave.end_date)
+        data.loc[mask, 'avg_indicator'] = 0
+        heatwaves_EHF[site]['indicator'] = data
+        # Remove these same dates from periods
+        data = heatwaves_EHF[site]['periods']
+        mask = (data['date'] >= invalid_heatwave.start_date) & \
+               (data['date'] <= invalid_heatwave.end_date)
+        heatwaves_EHF[site]['periods'] = heatwaves_EHF[site]['periods'][~mask]
+        # Remove the invalid heatwave dates from precip
+        data = heatwaves_EHF[site]['precip']
+        mask = (data['start_date'] == invalid_heatwave.start_date) & \
+               (data['end_date'] == invalid_heatwave.end_date)
+        heatwaves_EHF[site]['precip'] = heatwaves_EHF[site]['precip'][~mask]
+        # Remove the invalid heatwave dates from swc
+        data = heatwaves_EHF[site]['swc']
+        mask = (data['start_date'] == invalid_heatwave.start_date) & \
+               (data['end_date'] == invalid_heatwave.end_date)
+        heatwaves_EHF[site]['swc'] = heatwaves_EHF[site]['swc'][~mask]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

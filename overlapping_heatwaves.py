@@ -26,13 +26,14 @@ def find_heatwave_overlap(min_heatwaves, max_heatwaves, avg_heatwaves):
     if (sites_min == sites_max == sites_avg):
         # For each site
         for site in list(min_heatwaves.keys()):
+            print(f"Working on site {site}...")
             # Create subdictioary for the site
             final_heatwaves[site] = {}
             
             # Pull the indicator for each type of heatwave
-            min_indicator = min_heatwaves[site]['indicator']
-            max_indicator = max_heatwaves[site]['indicator']
-            avg_indicator = avg_heatwaves[site]['indicator']
+            min_indicator = min_heatwaves[site]['indicator'].iloc[:, 0:2] 
+            max_indicator = max_heatwaves[site]['indicator'][['date','heatwave_indicator']]
+            avg_indicator = avg_heatwaves[site]['indicator'][['date','heatwave_indicator']]
             
             # Rename the columns for the type of indicator it is
             min_indicator.columns = ['date','min_indicator']
