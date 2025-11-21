@@ -4,8 +4,7 @@ import pandas as pd
 from datetime import datetime
 import os
 
-def loadAMF(path, skip = [''],measures=['TIMESTAMP','TA_F','SW_IN_F','VPD_F','P_F',
-                            'NEE_VUT_REF','RECO_NT_VUT_REF','GPP_NT_VUT_REF']):
+def loadAMF(path, skip=None, measures=None):
     '''
     Name: loadAMF()
     Summary: Reads a directory of AmeriFlux files into one dataframe
@@ -16,42 +15,43 @@ def loadAMF(path, skip = [''],measures=['TIMESTAMP','TA_F','SW_IN_F','VPD_F','P_
 
     # Output: AMF_data ~ merged dataframe of all site data with a site identifier added
     '''
-    # Check if the filepath is actually a directory or not
+    
+    if skip is None:
+        skip = ['']
+    
+    if measures is None:
+        measures = [
+            'TIMESTAMP','TA_F','SW_IN_F','VPD_F','P_F',
+            'NEE_VUT_REF','RECO_NT_VUT_REF','GPP_NT_VUT_REF'
+        ]
+    
+    # Check if we were given an actual filepath
     try:
-        os.scandir(path) 
+        os.scandir(path)
     except FileNotFoundError:
         print("Thats not a valid filepath, check for error.")
-
+        return
     except NotADirectoryError:
-        # it wasn't a directory that was passed in
-        # but this doesn't yet test if the file exists, fix that!
         print("Path for a single file was input, please provide a directory.")
-        
-    else:
-        # it was a directory that was passed in, so let's make use of it
-        print('Directory name passed in')
-        
-        # If given a successful directory...
-        # Add site to the column list
-        measures.append('Site')
-        my_columns = measures
-        # Pull all the filepaths within the directory
-        paths = [f.path for f in os.scandir(path) if (f.is_file() and f.name != '.DS_Store')]
-        
-        AMF_data = pd.DataFrame(columns=my_columns)
-        # Loop through each file in the path
-        for this_file in paths:
-            if this_file in skip:
-                continue
-            else:
-                # Retrieve an AmeriFlux dataframe
-                data =  loadAMFFile(this_file,measures)
-                # Concatenate the data
-                AMF_data = pd.concat([AMF_data,data],ignore_index=True)
-    
+        return
+
+    print('Directory name passed in')
+
+    # Add site to the columns
+    my_columns = measures + ['Site']
+    # Find all the files within our directory
+    paths = [f.path for f in os.scandir(path) if (f.is_file() and f.name != '.DS_Store')]
+    # Initialize dataframe with columns of interest
+    AMF_data = pd.DataFrame(columns=my_columns)
+    # Loop through each file and use loadAMFFile to read in the data
+    for this_file in paths:
+        if this_file in skip:
+            continue
+        # Concat onto our cross-site dataframe
+        data = loadAMFFile(this_file, measures)      # pass ORIGINAL measures
+        AMF_data = pd.concat([AMF_data, data], ignore_index=True)
+
     return AMF_data
-
-
 
 def loadAMFFile(this_file, measures):
     '''
@@ -63,31 +63,37 @@ def loadAMFFile(this_file, measures):
 
     Output: file_df ~ AMF data organized into dataframe with additional site column
     '''
-    # Pull the site name from the filename
+    # Pull site from the filename
     filename = os.path.basename(this_file)
     site = filename[4:10]
     print("Loading site... " + site)
-    # Pull out the resolution
-    resolution = filename[26]
-    print(resolution)
-    # Read the csv
-    file_df = pd.read_csv(this_file)
-    # Convert the timestamp into a datetime object
-    if (resolution == "H"):
-        file_df.TIMESTAMP_START = pd.to_datetime(file_df.TIMESTAMP_START, format='%Y%m%d%H%M')
-    elif (resolution == "D"):
-        file_df.TIMESTAMP = pd.to_datetime(file_df.TIMESTAMP, format='%Y%m%d')
-    else:
-        print("Resolution error for " + site + ", check the timestamp.")
-    # Add in the site oclumn
-    file_df.loc[:,'Site'] = [site]*len(file_df)
-    # Select the columns that you want
-    file_df = file_df[measures]
     
-    return file_df
+    # Determine the resolution (HH or DD) of the file
+    resolution = filename[26]
+    file_df = pd.read_csv(this_file)
+    
+    # Format the date based on the resolution
+    if resolution == "H":
+        file_df.TIMESTAMP_START = pd.to_datetime(file_df.TIMESTAMP_START, format='%Y%m%d%H%M')
+    elif resolution == "D":
+        file_df.TIMESTAMP = pd.to_datetime(file_df.TIMESTAMP, format='%Y%m%d')
+    # Add site to the columns
+    required_cols = measures + ["Site"]
+    # Check if the file has all the measures we want
+    try:
+        # If not, isolate the measures of interest
+        file_df = file_df[measures]
+    except KeyError:
+        # If it is, return empty dataframe and print missing measure
+        print(f"Site {site} was not loaded because it is missing some measures.")
+        missing = set(measures) - set(file_df.columns)
+        print(f"Missing columns at {site}: {missing}")
+        return pd.DataFrame(columns=required_cols)
+    # Add the site column
+    file_df["Site"] = site
 
-
-print("All data loading functions loaded.")
+    # Force correct column order for all sites
+    return file_df.reindex(columns=required_cols)
 
 def find_shared_variables(path,measures):
     
@@ -337,3 +343,76 @@ def check_for_variable_longfile(this_file,column,value,measures,file_type='xslx'
         print("Function doesn't accomodate that kind of file yet.")
     
     return measure_df
+
+print("All data loading functions are loaded!")
+
+
+def loadBADM(path,skip,column,value,measure,file_type='xslx'):
+    
+    if skip is None:
+        skip = ['']
+    
+    if measure is None:
+        measure = ['IGBP']
+    
+    # Check if we were given an actual filepath
+    try:
+        os.scandir(path)
+    except FileNotFoundError:
+        print("Thats not a valid filepath, check for error.")
+        return
+    except NotADirectoryError:
+        print("Path for a single file was input, please provide a directory.")
+        return
+
+    print('Directory name passed in')
+
+    # Add site to the columns
+    my_columns = ['Site'] + measure
+    # Find all the files within our directory
+    paths = [
+        f.path for f in os.scandir(path)
+        if (f.is_file() and f.name != '.DS_Store' and not f.name.startswith('~$'))
+    ]
+
+    # Initialize dataframe with columns of interest
+    BADM_data = pd.DataFrame(columns=my_columns)
+    # Loop through each file and use loadAMFFile to read in the data
+    for this_file in paths:
+        if this_file in skip:
+            continue
+        # Concat onto our cross-site dataframe
+        data = loadBADMFile(this_file,column,value,measure,file_type)
+        data = data.reset_index(drop=True)
+        data = data.loc[:, ~data.columns.duplicated()]
+        BADM_data = pd.concat([BADM_data, data], ignore_index=True)
+
+    return BADM_data
+
+def loadBADMFile(this_file,column,value,measures,file_type):
+    if (file_type == 'xslx'):
+        # Pull the site name
+        filename = os.path.basename(this_file)
+        site = filename[4:10]
+        print(filename)
+        print(f"Pulling data for site {site}.")
+        # New columns
+        new_columns = ['Site'] + measures
+        # Read in excel file
+        df = pd.read_excel(this_file)
+        # Isolate variable column and its values
+        df = df[[column,value]]
+        # Pivot to wide so that the variables are the columns
+        wide = df.set_index(column).T
+        # Reset the index
+        wide.reset_index(drop=True, inplace=True)
+        # Isolate the columns
+        file_columns = wide.columns
+        # Add set column
+        wide['Site'] = site
+        # Isolate columns we want
+        measure_df = wide[new_columns]
+        
+    return measure_df
+        
+        

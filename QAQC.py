@@ -25,7 +25,6 @@ vars_to_plot = [
     "SW_IN_F",
     "VPD_F",
     "P_F",
-    "SWC",
     "GPP_NT_VUT_REF"
 ]
 
@@ -328,9 +327,12 @@ plt.scatter(Mo2_quantiles.month_day, Mo2_quantiles.PRISM_quantiles,c='blue',s=.5
 plt.title("Historical Daily 95th Quantile for US-Mo2")
 plt.show()
 
+# Creating site list variable
+# IGBP is available across all sites
+find_shared_variables_longfile(path="/Users/marleeyork/Documents/project2/data/BADM",
+                               measures=["IGBP"],column='VARIABLE',value='DATAVALUE',file_type='xslx')
 
-
-
+# Load in the data and grab the IGBP
 
 
 

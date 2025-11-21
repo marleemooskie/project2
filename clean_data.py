@@ -16,7 +16,7 @@ pd.set_option('display.max_rows',100)
 # Loading in the AmeriFlux data across all sites with soil water content
 # This automatically loads selected for columns, defined in loadAMF
 df = loadAMF(path='/Users/marleeyork/Documents/project2/data/AMFdataDD',
-                 measures=['TIMESTAMP','TA_F','SW_IN_F','VPD_F','P_F','NEE_VUT_REF','RECO_NT_VUT_REF','GPP_NT_VUT_REF','SWC_F_MDS_1'])
+                 measures=['TIMESTAMP','TA_F','SW_IN_F','VPD_F','P_F','NEE_VUT_REF','RECO_NT_VUT_REF','GPP_NT_VUT_REF'])
 
 df_hourly = loadAMF(path='/Users/marleeyork/Documents/project2/data/AMFdata_HH',
                  measures=['TIMESTAMP_START','TA_F'])
@@ -30,6 +30,10 @@ site_data = pd.read_csv("/Users/marleeyork/Documents/project2/data/site_list.csv
 IGBP = site_data[['Site ID','Vegetation Abbreviation (IGBP)']]
 IGBP.columns = ['Site','IGBP']
 df = pd.merge(df,IGBP,on="Site",how="inner").drop_duplicates()
+
+# Loading IGBP for the long list of sites
+IGBP = loadBADM(path,skip,column,value,measure,file_type='xslx')
+df = pd.merge(df,IGBP,on='Site',how='inner').drop_duplicates()
 
 df.columns
 df.shape

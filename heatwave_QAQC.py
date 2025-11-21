@@ -3,6 +3,8 @@ This script includes functions that check the quality of heatwaves based on
 the AmeriFlux QAQC temperature flags.
 '''
 import pandas as pd
+import os
+os.chdir(path="/Users/marleeyork/Documents/project2/heatwave_definition")
 from define_heatwaves import *
 
 def avg_QAQC_check(site_heatwave_dictionary, dates, TA_QAQC, QAQC_threshold,
@@ -229,53 +231,6 @@ def remove_invalid_heatwaves(heatwaves_dictionary, invalid_heatwaves):
             heatwaves_dictionary[site]['swc'] = heatwaves_dictionary[site]['swc'][~mask]
     
     return heatwaves_dictionary
-
-
-# Remove these invalid heatwaves from the list of heatwaves
-for site in invalid_heatwaves.Site.unique():
-    print(f"Cleaning up site {site}...")
-    # Isolate invalid heatwaves for that site
-    site_invalid = invalid_heatwaves[invalid_heatwaves['Site']==site]
-    # Loop through the 
-    for i in range(site_invalid.shape[0]):
-        invalid_heatwave = site_invalid.iloc[i]
-        print(f"Removing invalid heatwave {invalid_heatwave}.")
-        # Drop the invalid from the start date
-        heatwaves_EHF[site]['start_dates'] = [
-            d for d in heatwaves_EHF[site]['start_dates']
-            if d != invalid_heatwave.start_date
-            ]
-        # Drop the invalid from the end date
-        heatwaves_EHF[site]['end_dates'] = [
-            d for d in heatwaves_EHF[site]['end_dates']
-            if d != invalid_heatwave.end_date
-            ]
-        # Drop the invalid from the summary
-        data = heatwaves_EHF[site]['summary']
-        heatwaves_EHF[site]['summary'] = data[
-            data['start_dates'] != invalid_heatwave.start_date
-            ].reset_index(drop=True)
-        # Change the indicator values to 0 at these invalid heatwaves
-        data = heatwaves_EHF[site]['indicator']
-        mask = (data['date'] >= invalid_heatwave.start_date) & \
-               (data['date'] <= invalid_heatwave.end_date)
-        data.loc[mask, 'avg_indicator'] = 0
-        heatwaves_EHF[site]['indicator'] = data
-        # Remove these same dates from periods
-        data = heatwaves_EHF[site]['periods']
-        mask = (data['date'] >= invalid_heatwave.start_date) & \
-               (data['date'] <= invalid_heatwave.end_date)
-        heatwaves_EHF[site]['periods'] = heatwaves_EHF[site]['periods'][~mask]
-        # Remove the invalid heatwave dates from precip
-        data = heatwaves_EHF[site]['precip']
-        mask = (data['start_date'] == invalid_heatwave.start_date) & \
-               (data['end_date'] == invalid_heatwave.end_date)
-        heatwaves_EHF[site]['precip'] = heatwaves_EHF[site]['precip'][~mask]
-        # Remove the invalid heatwave dates from swc
-        data = heatwaves_EHF[site]['swc']
-        mask = (data['start_date'] == invalid_heatwave.start_date) & \
-               (data['end_date'] == invalid_heatwave.end_date)
-        heatwaves_EHF[site]['swc'] = heatwaves_EHF[site]['swc'][~mask]
 
 
 
