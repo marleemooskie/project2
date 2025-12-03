@@ -217,24 +217,39 @@ def define_EHF_hotdays(timeseries_dates, timeseries_temperature,
     # Add a month_day column
     timeseries_df['month_day'] = timeseries_df.date.dt.strftime('%m-%d')
     # Merge timeseries data with the DMT 95th quantiles
-    timeseries_df = pd.merge(timeseries_df,T95_by_day,on="month_day",how="inner")
-    timeseries_df = timeseries_df.iloc[29:]
+    timeseries_df = pd.merge(timeseries_df,T95_by_day,on="month_day",how="left")
+
     # Initialize lists to store all the indices
     three_day_mean_list = []
     thirty_day_mean_list = []
     EHI_accl_list = []
-    EHI_sig_list = []
+    EHI_sig_list = []   # keep building these similarly
     EHF_hotdays = []
-    for i in range(29,len(timeseries_temperature)):
-        # Calculate and store the 3 day mean
-        three_day_mean = timeseries_temperature[(i-2):(i+1)].sum() / 3
+
+    n = len(timeseries_temperature)
+
+    for i in range(n):
+        # 3-day mean (needs indices i-2, i-1, i)
+        if i < 2:
+            three_day_mean = np.nan
+        else:
+            three_day_mean = timeseries_temperature[(i-2):(i+1)].mean()
         three_day_mean_list.append(three_day_mean)
-        # Calculate and store the 30 day mean
-        thirty_day_mean = timeseries_temperature[(i-29):(i+1)].sum() / 30
+
+        # 30-day mean (needs i-29 ... i)
+        if i < 29:
+            thirty_day_mean = np.nan
+        else:
+            thirty_day_mean = timeseries_temperature[(i-29):(i+1)].mean()
         thirty_day_mean_list.append(thirty_day_mean)
-        # Calculate the acclimation score
-        EHI_accl = three_day_mean - thirty_day_mean
-        EHI_accl_list.append(EHI_accl)
+
+        # EHI_accl only when both means exist
+        if np.isnan(three_day_mean) or np.isnan(thirty_day_mean):
+            EHI_accl_list.append(np.nan)
+        else:
+            EHI_accl_list.append(three_day_mean - thirty_day_mean)
+
+
     # Add calculated mean indices to the timeseries dataframe
     timeseries_df.loc[:,'EHI_accl'] = EHI_accl_list
     timeseries_df.loc[:,'thirty_day_mean'] = thirty_day_mean_list
@@ -250,11 +265,11 @@ def define_EHF_hotdays(timeseries_dates, timeseries_temperature,
     # Organize into a dataframe   
     print("We made it to the dataframe")
     print("Timeseries dates: " +str(len(timeseries_dates[29:])))
-    print("Timeseries_df.EHF: " +str(len(timeseries_df.EHF)))
-    print("hotday_indicator: " +str(len(hotday_indicator)))
+    print("Timeseries_df.EHF: " +str(len(timeseries_df.EHF[29:])))
+    print("hotday_indicator: " +str(len(hotday_indicator[29:])))
     EHF_df = pd.DataFrame({'date':timeseries_dates[29:],
-                           'EHF_score':timeseries_df.EHF.values,
-                           'hotday_indicator':hotday_indicator}).reset_index(drop=True)
+                           'EHF_score':timeseries_df.EHF.values[29:],
+                           'hotday_indicator':hotday_indicator[29:]}).reset_index(drop=True)
     print("We made it past the dataframe.")
     
     return EHF_df
@@ -928,7 +943,6 @@ def calculate_moisture(timeseries_dates,timeseries_moisture,start_dates,end_date
             average = sum(moisture) / len(moisture)
             total = sum(moisture)
             variability = np.std(moisture)
-            print(f'Variability: {variability}')
             # Add to list of heatwave moisture averages
         else:
             average = pd.NA

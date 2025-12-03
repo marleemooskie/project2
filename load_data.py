@@ -307,6 +307,20 @@ def find_shared_variables_longfile(path,measures,column,value,file_type='xslx'):
 
 
 def check_for_variable_longfile(this_file,column,value,measures,file_type='xslx'):
+    """
+    Name: check_for_variable_longfile()
+    Summary: This checks if a variable is present in the long file raw form of the
+            BADM data.
+    Input: this_file ~ the pathname for the file
+           column ~ the column that the measure names are listed in
+           value ~ the column name with the values associated with above
+           measures ~ what values we want to check for
+           file_type ~ what kind of file it is (AMF BADM is xlsx)
+
+    Output: measure_df ~ dataframe with the presence or absence of each measure
+                        in the BADM dataset
+    """
+    
     if (file_type == 'xslx'):
         # Pull the site name
         filename = os.path.basename(this_file)
@@ -348,6 +362,18 @@ print("All data loading functions are loaded!")
 
 
 def loadBADM(path,skip,column,value,measure,file_type='xslx'):
+    """
+    Name: loadBADM()
+    Summary: This loads a directory of BADM data and organizes into a dataframe
+    Input: path ~ the pathname for the directory
+           skip ~ any files we want to leave out
+           column ~ the column that the measure names are listed in
+           value ~ the column name with the values associated with above
+           measures ~ the measures we want to oull
+           file_type ~ what kind of file it is (AMF BADM is xlsx)
+
+    Output: BADM_data ~ dataframe of all sites and the BADM measures as columns
+    """
     
     if skip is None:
         skip = ['']
@@ -390,6 +416,17 @@ def loadBADM(path,skip,column,value,measure,file_type='xslx'):
     return BADM_data
 
 def loadBADMFile(this_file,column,value,measures,file_type):
+    """
+    Name: loadBADMFile()
+    Summary: This loads a file of BADM data and pulls out specific measures from it
+    Input: this_file ~ the pathname for the file
+           column ~ the column that the measure names are listed in
+           value ~ the column name with the values associated with above
+           measures ~ the measures we want to pull
+           file_type ~ what kind of file it is (AMF BADM is xlsx)
+
+    Output: BADM_data ~ dataframe of all sites and the BADM measures as columns
+    """
     if (file_type == 'xslx'):
         # Pull the site name
         filename = os.path.basename(this_file)

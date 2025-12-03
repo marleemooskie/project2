@@ -26,13 +26,14 @@ df_hourly = loadAMF(path='/Users/marleeyork/Documents/project2/data/AMFdata_HH',
 historical_tmean = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/extracted_daily_tmean.csv")
 
 # Load the IGBP data and merge to df
-site_data = pd.read_csv("/Users/marleeyork/Documents/project2/data/site_list.csv",encoding='latin1')
-IGBP = site_data[['Site ID','Vegetation Abbreviation (IGBP)']]
-IGBP.columns = ['Site','IGBP']
-df = pd.merge(df,IGBP,on="Site",how="inner").drop_duplicates()
+# site_data = pd.read_csv("/Users/marleeyork/Documents/project2/data/site_list.csv",encoding='latin1')
+# IGBP = site_data[['Site ID','Vegetation Abbreviation (IGBP)']]
+# IGBP.columns = ['Site','IGBP']
+# df = pd.merge(df,IGBP,on="Site",how="inner").drop_duplicates()
 
 # Loading IGBP for the long list of sites
-IGBP = loadBADM(path,skip,column,value,measure,file_type='xslx')
+IGBP = loadBADM(path="/Users/marleeyork/Documents/project2/data/BADM",skip=[''],
+                column='VARIABLE',value='DATAVALUE',measure=['IGBP'],file_type='xslx')
 df = pd.merge(df,IGBP,on='Site',how='inner').drop_duplicates()
 
 df.columns
@@ -40,6 +41,8 @@ df.shape
 df.Site.unique()
 len(df.Site.unique())
 df.IGBP.unique()
+
+# I'm commenting out below to fit the heatwaves to everything
 
 ###############################################################################
 ##                        Bad Data Edits                                     ##
@@ -51,7 +54,7 @@ df = df[~mask]
 
 # Dropping US-Ne1, not sure why its in here
 df = df[df['IGBP']!='CRO']
-
+'''
 # If GPP is negative, set it to 0
 df.loc[df['GPP_NT_VUT_REF']<0,'GPP_NT_VUT_REF'] = 0
 
@@ -112,7 +115,8 @@ for site in df_hourly.Site.unique():
     df_HH = pd.concat([df_HH,site_keep[['TIMESTAMP_START','TA_F','Site']]])
     
 # USE df_HH FOR ALL HOURLY ANALYSIS
-    
+'''
+
 ###############################################################################
 ##                        Replacing SWC Edits                                ##
 ###############################################################################
@@ -126,6 +130,7 @@ At the end of the day, the data for Syv and Kon came out even worse doing this,
 so they are going to be removed. If we need to do this with other sites in the future,
 then we can go ahead and use this code framework to reproduce integrating different
 SWC variables.
+'''
 '''
 # Check what SWC variables these three files have
 swc_measures = ["SWC_F_MDS_1","SWC_F_MDS_2","SWC_F_MDS_3","SWC_F_MDS_4","SWC_F_MDS_5",
@@ -195,3 +200,4 @@ df = pd.concat([df,df_swc,df_swc_Syv])
 
 # Removing Syv and Kon since these other SWC values did not help
 df = df[~df['Site'].isin(['US-Kon','US-Syv'])]
+'''

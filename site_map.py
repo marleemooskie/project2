@@ -10,7 +10,7 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 
 # Import dataframe of sites
-sites_df = pd.read_csv('/Users/marleeyork/Documents/project2/data/site_locations_for_PRISM.csv')
+sites_df = pd.read_csv('/Users/marleeyork/Documents/project2/data/site_locations.csv')
 sites_df.Lon = sites_df.Lon.astype('float')
 sites_df.Lat = sites_df.Lat.astype('float')
 
@@ -56,7 +56,7 @@ for i, row in sites_df.iterrows():
         va='center'
     )
 
-plt.title("Locations of the sites I'm starting with")
+plt.title("All 135 sites")
 plt.legend(loc='lower left')
 plt.tight_layout()
 plt.show()
