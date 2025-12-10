@@ -12,6 +12,7 @@ first I will need to acquire the PRISM for these measrements.
 Also, we need PRISM data for Canada too.
 '''
 import matplotlib.pyplot as plt
+pd.set_option("display.max_rows", 150)
 
 ###############################################################################
 ##                                  QAQC                                     ##
@@ -202,122 +203,281 @@ print(heatwave_QAQC.groupby('Site').heatwave_invalidity.sum() / heatwave_QAQC.gr
 
 # Running QAQC heatwave check to explore heatwaves that do not pass quality checks
 ###############################################################################
-##                   MAXIMUM TEMPERATURE CHECKS                              ##
+##             MAXIMUM, MINIMUM, and AVERAGE TEMPERATURE CHECKS              ##
 ###############################################################################
 
 # Comparing max temperature PRISM to AmeriFlux
 # Right now, I have this available across all 33 sites!
 
 # Load in the data
-historical_max = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/extracted_daily_climate_data_tmax.csv")
+ERA_max = pd.read_csv("/Users/marleeyork/Documents/project2/data/ERA/ERA_tmax_data.csv")
+ERA_min = pd.read_csv("/Users/marleeyork/Documents/project2/data/ERA/ERA_tmin_data.csv")
+ERA_mean = pd.read_csv("/Users/marleeyork/Documents/project2/data/ERA/ERA_tmean_data.csv")
+PRISM_max = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/extracted_daily_climate_data_tmax.csv")
+PRISM_min = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/extracted_daily_tmin_data_wide.csv")
+PRISM_mean = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/extracted_daily_tmean.csv")
+
+# Transform ERA temperature from Kelvin to C
+ERA_max['ERA_TA'] = ERA_max["t2m"] - 273.15
+ERA_min['ERA_TA'] = ERA_min["t2m"] - 273.15
+ERA_mean['ERA_TA'] = ERA_mean["t2m"] - 273.15
+
+# Transform dates into datetime variables
+ERA_max['date'] = pd.to_datetime(ERA_max.valid_time)
+ERA_min['date'] = pd.to_datetime(ERA_min.valid_time)
+ERA_mean['date'] = pd.to_datetime(ERA_mean.valid_time)
+PRISM_max['date'] = pd.to_datetime(PRISM_max.date)
+PRISM_min['date'] = pd.to_datetime(PRISM_min.date)
+PRISM_mean['date'] = pd.to_datetime(PRISM_mean.date)
+
+# Reduce down to columns of interest
+ERA_max = ERA_max[['Site','date','ERA_TA']]
+ERA_min = ERA_min[['Site','date','ERA_TA']]
+ERA_mean = ERA_mean[['Site','date','ERA_TA']]
 
 # Drop any sites that aren't in df
 included_sites = df.Site.unique()
 included_sites = np.insert(included_sites,0,'date')
-historical_max = historical_max[included_sites]
+ERA_max = ERA_max[ERA_max['Site'].isin(included_sites)]
+ERA_min = ERA_min[ERA_min['Site'].isin(included_sites)]
+ERA_mean = ERA_mean[ERA_mean['Site'].isin(included_sites)]
+PRISM_max = PRISM_max[included_sites]
+PRISM_min = PRISM_min[included_sites]
+PRISM_mean = PRISM_mean[included_sites]
 
-# Findig which sites have missing values
+# Findig which sites have missing values in PRISM data
 search_value = -9999
-columns_with_value = []
-for col in historical_max.columns:
+missing_max = []
+missing_min = []
+missing_avg = []
+for col in PRISM_max.columns:
     # Check if the search_value exists in the current column
-    if historical_max[col].astype(str).str.contains(str(search_value)).any():
-        columns_with_value.append(col)
+    if PRISM_max[col].astype(str).str.contains(str(search_value)).any():
+        missing_max.append(col)
+
+for col in PRISM_min.columns:
+    if PRISM_min[col].astype(str).str.contains(str(search_value)).any():
+        missing_min.append(col)
+
+for col in PRISM_mean.columns:
+    if PRISM_mean[col].astype(str).str.contains(str(search_value)).any():
+        missing_avg.append(col)
         
-print(f"Sites that we don't have PRISM data include: {columns_with_value}")
+print(f"Sites that we don't have max PRISM data include: {missing_max}")
+print(f"Sites that we don't have min PRISM data include: {missing_min}")
+print(f"Sites that we don't have mean PRISM data include: {missing_avg}")
 
 # These columns are completely missing all PRISM temperature, interesting
 # As of now, its the Canada sites we are missing data for (PRISM doesn't go to Canada)
 # and two US sites that are in Alaska
-historical_max[columns_with_value]
+PRISM_max[missing_max]
+PRISM_mean[missing_avg]
 
 # Starting off with the ones that we do know
-df_max = historical_max.drop(columns=columns_with_value)
+PRISM_max = PRISM_max.drop(columns=missing_max)
+PRISM_min = PRISM_min.drop(columns=missing_min)
+PRISM_mean = PRISM_mean.drop(columns=missing_avg)
 
-# Pivoting df_max longer
-df_max = df_max.melt(id_vars=['date'],var_name='Site',value_name='max_PRISM')
+# Pivot PRISM data loner
+PRISM_max = pd.melt(PRISM_max,id_vars=['date'],var_name='Site',value_name='PRISM_TA')
+PRISM_min = pd.melt(PRISM_min,id_vars=['date'],var_name='Site',value_name='PRISM_TA')
+PRISM_mean = pd.melt(PRISM_mean,id_vars=['date'],var_name='Site',value_name='PRISM_TA')
 
-# Now I am going to calculate the daily maximum temperature for each of my sites
+# Now I am going to calculate the daily maximum and minimum temperatures for each of my sites
 # using my function as done in my heatwave definition
+AMF_mean = df[['Site','TIMESTAMP','TA_F']]
+AMF_mean.columns = ['Site','date','TA_F']
+
 AMF_max = pd.DataFrame(columns=['Site','date','max_temperature'])
-for site in df_max.Site.unique():
+for site in df.Site.unique():
     this_site = df_hourly[df_hourly['Site']==site]
     this_site_temp = find_max_temperatures(this_site.TIMESTAMP_START,this_site.TA_F)
     this_site_temp['Site'] = [site] * this_site_temp.shape[0]
     # concatenate with entire dataframe
     AMF_max = pd.concat([AMF_max,this_site_temp])
-    
-# Convert df_max date to a datetime variable
-df_max.date = pd.to_datetime(df_max.date)
 
-# Merging df and df max
-# df.shape = (159306, 11)
-# df_max.shape = (15705, 24)
-# df_max after the merge = (140984, 4)
-df_max = pd.merge(AMF_max, df_max, on=['Site','date'])
+AMF_min = pd.DataFrame(columns=['Site','date','min_temperature'])
+for site in df.Site.unique():
+    this_site = df_hourly[df_hourly['Site']==site]
+    this_site_temp = find_min_temperatures(this_site.TIMESTAMP_START,this_site.TA_F)
+    this_site_temp['Site'] = [site] * this_site_temp.shape[0]
+    # concatenate with entire dataframe
+    AMF_min = pd.concat([AMF_min,this_site_temp])
 
-# Lets look at the overall correlation between the PRISM and AmeriFlux data now
-fig, ax = plt.subplots()
-plt.scatter(df_max.max_temperature,df_max.max_PRISM, s=.5,alpha=.1)
-plt.plot([-30, 50], [-30, 50], '--',c='red')
-plt.xlabel("AMF Max Temperature")
-plt.ylabel("PRISM Max Temperature")
+# Merging ERA and PRISM data with AMF_max
+# ERA_max.shape = (1713056, 6)
+# PRISM_max.shape = (675315, 3)
+# AMF_max.shape = (447814, 3)
+ERA_max = pd.merge(AMF_max, ERA_max, on=['Site','date'],how="left")
+ERA_min = pd.merge(AMF_min, ERA_min, on=['Site','date'],how="left")
+ERA_mean = pd.merge(AMF_mean, ERA_mean, on=['Site','date'],how="left")
+PRISM_max = pd.merge(AMF_max, PRISM_max, on=['Site','date'],how="left")
+PRISM_min = pd.merge(AMF_min,PRISM_min, on=['Site','date'],how="left")
+PRISM_mean = pd.merge(AMF_mean,PRISM_mean, on=['Site','date'],how="left")
+
+# Drop those sites that we don't have for ERA and PRISM
+mask = ~PRISM_max.PRISM_TA.isna()
+PRISM_max = PRISM_max[mask]
+mask = ~PRISM_min.PRISM_TA.isna()
+PRISM_min = PRISM_min[mask]
+mask = ~PRISM_mean.PRISM_TA.isna()
+PRISM_mean = PRISM_mean[mask]
+
+mask = ~ERA_max.ERA_TA.isna()
+ERA_max = ERA_max[mask]
+mask = ~ERA_min.ERA_TA.isna()
+ERA_min = ERA_min[mask]
+mask = ~ERA_mean.ERA_TA.isna()
+ERA_mean = ERA_mean[mask]
+
+# Lets look at the overall correlation of ERA and PRISM with AmeriFlux data now
+fig, ax = plt.subplots(3,2,figsize=(8,12))
+ax = ax.flatten()
+ax[0].scatter(ERA_max.max_temperature,ERA_max.ERA_TA, s=.5,alpha=.1)
+ax[0].plot([-30, 50], [-30, 50], '--',c='red')
+ax[0].set_xlabel("AMF Max Temperature")
+ax[0].set_ylabel("ERA Max Temperature")
+ax[0].set_title("ERA")
+ax[1].scatter(PRISM_max.max_temperature,PRISM_max.PRISM_TA,s=.5,alpha=.1)
+ax[1].plot([-30, 50], [-30, 50], '--',c='red')
+ax[1].set_xlabel("AMF Max Temperature")
+ax[1].set_ylabel("PRISM Max Temperature")
+ax[1].set_title("PRISM")
+ax[2].scatter(ERA_min.min_temperature,ERA_min.ERA_TA, s=.5,alpha=.1)
+ax[2].plot([-30, 50], [-30, 50], '--',c='red')
+ax[2].set_xlabel("AMF Min Temperature")
+ax[2].set_ylabel("ERA Min Temperature")
+ax[3].scatter(PRISM_min.min_temperature,PRISM_min.PRISM_TA,s=.5,alpha=.1)
+ax[3].plot([-30, 50], [-30, 50], '--',c='red')
+ax[3].set_xlabel("AMF Min Temperature")
+ax[3].set_ylabel("PRISM Min Temperature")
+ax[4].scatter(ERA_mean.TA_F,ERA_mean.ERA_TA, s=.5,alpha=.1)
+ax[4].plot([-30, 50], [-30, 50], '--',c='red')
+ax[4].set_xlabel("AMF Mean Temperature")
+ax[4].set_ylabel("ERA Mean Temperature")
+ax[5].scatter(PRISM_mean.TA_F,PRISM_mean.PRISM_TA,s=.5,alpha=.1)
+ax[5].plot([-30, 50], [-30, 50], '--',c='red')
+ax[5].set_xlabel("AMF Mean Temperature")
+ax[5].set_ylabel("PRISM Mean Temperature")
+plt.tight_layout()
 plt.show()
 
 # Checking the overall correlation coefficient
 # Correlation is 93%, which is pretty good
-np.corrcoef(df_max.max_temperature,df_max.max_PRISM)
+np.corrcoef(ERA_max.max_temperature,ERA_max.ERA_TA)
+np.corrcoef(PRISM_max.max_temperature,PRISM_max.PRISM_TA)
+
+np.corrcoef(ERA_min.min_temperature,ERA_min.ERA_TA)
+np.corrcoef(PRISM_min.min_temperature,PRISM_min.PRISM_TA)
+
+valid = ERA_mean[["TA_F", "ERA_TA"]].dropna()
+np.corrcoef(valid["TA_F"], valid["ERA_TA"])
+np.corrcoef(PRISM_mean.TA_F,PRISM_mean.PRISM_TA)
 
 # Checking site by site correlation to look for any anomalies
-# So far ONA and KFS have the weakest correlation, which is mid 80s. Everything
-# else is fine.
-for site in df_max.Site.unique():
-    this_site = df_max[df_max['Site']==site]
-    print(f"Correlation for site {site} is {np.corrcoef(this_site.max_temperature,this_site.max_PRISM)[0][1]}")
+corr_df = pd.DataFrame(columns=['Site','ERA','PRISM'])
+for site in ERA_max.Site.unique():
+    this_site_ERA = ERA_max[ERA_max['Site']==site]
+    this_site_PRISM = PRISM_max[PRISM_max['Site']==site]
+    ERA_corr = round(np.corrcoef(this_site_ERA.max_temperature,this_site_ERA.ERA_max)[0][1],2)
+    PRISM_corr = round(np.corrcoef(this_site_PRISM.max_temperature,this_site_PRISM.PRISM_max)[0][1],2)
+    corr_df.loc[len(corr_df)] = [site,ERA_corr,PRISM_corr]
 
+# Finding whether the ERA or PRISM data is better
+preference = []
+for i in range(len(corr_df)):
+    site_preference = 'PRISM' if (corr_df.PRISM[i] >= corr_df.ERA[i]) else 'ERA'
+    preference.append(site_preference)
+corr_df['preference'] = preference
+
+# Since the ERA data is preferred everytime, we are going to move forward with that
 # Finding the 95th percentile for each
-for site in df_max.Site.unique():
-    this_site = df_max[df_max['Site']==site]
+for site in ERA_max.Site.unique():
+    this_site = ERA_max[ERA_max['Site']==site]
     # Calculate the 95th quantile overall
     AMF_95 = np.quantile(this_site.max_temperature,.95)
-    PRISM_95 = np.quantile(this_site.max_PRISM,.95)
-    print(f"95th quantiles at site {site} are {AMF_95} and {PRISM_95}.")
+    ERA_95 = np.quantile(this_site.ERA_max,.95)
+    print(f"95th quantiles at site {site} are {round(AMF_95,2)} and {round(ERA_95,2)}.")
     
 # Find correlation between daily 95th quantile values
-# So far, these 
-daily_quantiles = pd.DataFrame(columns=['Site','month_day','AMF_quantiles','PRISM_quantiles'])
-for site in df_max.Site.unique():
-    this_site = df_max[df_max['Site']==site]
+# All of these look good except for US-CAK, CA-Ca1, and US-CS2
+daily_quantiles = pd.DataFrame(columns=['Site','month_day','AMF_quantiles','ERA_quantiles','PRISM_quantiles'])
+daily_95_corr = pd.DataFrame(columns=['Site','ERA_corr','PRISM_corr'])
+for site in ERA_max.Site.unique():
+    this_site = ERA_max[ERA_max['Site']==site]
+    this_site_PRISM = PRISM_max[PRISM_max['Site']==site]
     # Calculate window quantiles for each
     AMF_daily_95 = moving_window_quantile(this_site.date,this_site.max_temperature,.95, 15)
     AMF_daily_95.columns = ["month_day","AMF_quantiles"]
-    PRISM_daily_95 = moving_window_quantile(this_site.date,this_site.max_PRISM,.95,15)
-    PRISM_daily_95.columns = ["month_day","PRISM_quantiles"]
+    ERA_daily_95 = moving_window_quantile(this_site.date,this_site.ERA_max,.95,15)
+    ERA_daily_95.columns = ["month_day","ERA_quantiles"]
+    # If the site exists for PRISM, then also calculate the quantiles
+    if len(this_site_PRISM) > 0:
+        PRISM_daily_95 = moving_window_quantile(this_site_PRISM.date,this_site_PRISM.PRISM_max,.95,15)
+        PRISM_daily_95.columns = ['month_day','PRISM_quantiles']
+        PRISM_corr = round(np.corrcoef(AMF_daily_95.AMF_quantiles,PRISM_daily_95.PRISM_quantiles)[0][1])
+    else:
+        PRISM_daily_95 = pd.DataFrame({'month_day':AMF_daily_95.month_day,
+                                       'PRISM_quantiles':[np.nan]*len(AMF_daily_95)})
+        PRISM_corr = np.nan
     # Merge these together
-    window_quantiles = pd.merge(AMF_daily_95,PRISM_daily_95,on='month_day',how='inner')
+    window_quantiles = pd.merge(AMF_daily_95,ERA_daily_95,on='month_day',how='inner')
+    window_quantiles = pd.merge(window_quantiles,PRISM_daily_95,on='month_day',how='left')
     # Add a site columns
     window_quantiles['Site'] = [site] * window_quantiles.shape[0]
     # Stack it onto the dataframe across all sites
     daily_quantiles = pd.concat([daily_quantiles,window_quantiles])
-    # Print off the correlation coefficient
-    print(f"Correlation coefficient for site {site} is {np.corrcoef(daily_quantiles.AMF_quantiles,daily_quantiles.PRISM_quantiles)[0][1]}")
+    # Calculate the correlations for each
+    ERA_corr = round(np.corrcoef(AMF_daily_95.AMF_quantiles,ERA_daily_95.ERA_quantiles)[0][1],2)
+    # Save correlations into a dataframe
+    daily_95_corr.loc[len(daily_95_corr)] = [site,ERA_corr,PRISM_corr]
+print(daily_95_corr)
+print(daily_95_corr[daily_95_corr['ERA_corr'] < .93])
     
 # Plotting the AMF and PRISM 95th moving quantiles
 fig, ax = plt.subplots()
-sb.lmplot(x='AMF_quantiles', y='PRISM_quantiles', data=daily_quantiles, hue='Site', fit_reg=False)
+sb.lmplot(x='AMF_quantiles', y='PRISM_quantiles',hue='Site',data=daily_quantiles)
 plt.plot([0, 40], [0,40], '--',c='black')
 plt.show()
+
+fig, ax = plt.subplots()
+sb.lmplot(x='AMF_quantiles',y='ERA_quantiles',hue='Site',data=daily_quantiles)
+plt.plot([-20, 40], [-20,40], '--',c='black')
+plt.tight_layout()
+plt.show()
+
+# Lets look at the squared difference of daily 95th quantiles for each site
+daily_quantiles['MSE_ERA_95'] = (daily_quantiles.ERA_quantiles - daily_quantiles.AMF_quantiles)**2
+daily_quantiles['MSE_PRISM_95'] = (daily_quantiles.PRISM_quantiles - daily_quantiles.AMF_quantiles)**2
+daily_95_MSE = daily_quantiles.groupby('Site')[["MSE_ERA_95","MSE_PRISM_95"]].sum() / 365
+daily_95_MSE = pd.DataFrame(daily_95_MSE).reset_index()
+daily_95_MSE.loc[daily_95_MSE['MSE_PRISM_95']==0,'MSE_PRISM_95'] = np.nan
+
+# Lets also look at the squared difference of daily temperatures
+ERA_max['MSE_ERA'] = (ERA_max.ERA_max - ERA_max.max_temperature) ** 2
+PRISM_max['MSE_PRISM'] = (PRISM_max.PRISM_max - PRISM_max.max_temperature) ** 2
+daily_MSE = pd.merge(ERA_max, PRISM_max, on=['Site','date','max_temperature'], how='left')
+daily_MSE.groupby('Site')[['MSE_ERA','MSE_PRISM']].sum()
+
+# Now lets get the sites where the PRISM data performs better than ERA
+PRISM_is_better95 = daily_95_MSE[daily_95_MSE['MSE_PRISM_95'] < daily_95_MSE['MSE_ERA_95']].Site.unique()
+PRISM_is_better = daily_MSE[daily_MSE['MSE_PRISM'] < daily_MSE['MSE_ERA']].Site.unique()
 
 # Checking the above to see if its a certain month or season we should be worried about
 # It is consistently these October/November 95th quantile temperatures that
 # are very different.
-KFS_quantiles = daily_quantiles[daily_quantiles['Site']=='US-KFS']
-KFS_quantiles.month_day = pd.to_datetime(KFS_quantiles.month_day,format='%m-%d')
-fig, ax = plt.subplots()
-plt.scatter(KFS_quantiles.month_day, KFS_quantiles.AMF_quantiles,c='red',s=.5)
-plt.scatter(KFS_quantiles.month_day, KFS_quantiles.PRISM_quantiles,c='blue',s=.5)
-plt.title("Historical Daily 95th Quantile for US-KFS")
-plt.show()
+for site in PRISM_is_better95.Site.unique():
+    site_quantiles = daily_quantiles[daily_quantiles['Site']==site]
+    site_quantiles.month_day = pd.to_datetime(site_quantiles.month_day,format='%m-%d')
+    fig, ax = plt.subplots()
+    plt.scatter(site_quantiles.month_day, site_quantiles.AMF_quantiles,c='black',s=.5,label="AMF")
+    plt.scatter(site_quantiles.month_day, site_quantiles.ERA_quantiles,c='red',s=.5,label="ERA")
+    plt.scatter(site_quantiles.month_day, site_quantiles.PRISM_quantiles,c='blue',s=.5,label="PRISM")
+    plt.legend()
+    plt.title(f"Historical Daily 95th Quantile for {site}")
+    plt.show()
+    
+    input("Press enter to continue: ")
 
 Mo2_quantiles = daily_quantiles[daily_quantiles['Site']=='US-Mo2']
 Mo2_quantiles.month_day = pd.to_datetime(Mo2_quantiles.month_day,format='%m-%d')
