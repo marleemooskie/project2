@@ -2,25 +2,22 @@
 This script will calculate magitude and intensities of each heatwave.
 '''
 
-def integrate_value(all_heatwaves_dictionary, all_dates, all_variable_of_interest,
-                           historical_dates, historical_temperatures):
+def cumulative_exceedence(heatwaves_dictionary, daily_AMF_TA, historical_data):
     '''
     This function integrates over a certain variable during a heatwave and takes
     the average of it.
     
     Parameters
     ----------
-    all_heatwaves_dictionary : TYPE
-        DESCRIPTION. 
+    heatwaves_dictionary : TYPE
+        DESCRIPTION. Dictionary of all heatwaves.
     
-    all_dates : TYPE
-        DESCRIPTION. 
-        
-    all_variable_of_interest : TYPE
-        DESCRIPTION. 
     
-    all_heatwaves_dictionary : TYPE
-        DESCRIPTION. 
+    historical_dates : TYPE
+        DESCRIPTION. list of all heatwaves
+    
+    historical_temperatures : TYPE
+        DESCRIPTION. list of all dates corresponding to historical data
     
     Returns
     -------
@@ -30,5 +27,54 @@ def integrate_value(all_heatwaves_dictionary, all_dates, all_variable_of_interes
         Day-intensified, Day-Night Spike, and Triad
 
     '''
-    return integrated_value
+    
+    for site in heatwaves_dictionary.keys():
+        # Pull out the dictionary for that site
+        site_dictionary = heatwaves_dictionary[site]
+        site_temperature = daily_AMF_TA[daily_AMF_TA['Site']==site]
+        site_historical = historical_data[historical_data['Site']==site]
+        historical_temperature = site_historical['TA_F']
+        historical_dates = site_historical['TIMESTAMP']
+        site_heatwaves = pd.DataFrame({'start_dates':site_dictionary['start_dates'],
+                                       'end_dates':site_dictionary['end_dates']})
+        # Calculate the 3 day moving average for historical data
+        historical_DMT = []
+        for i in range(2,len(historical_temperature)):
+            DMT = historical_temperature[(i-2):(i+1)].sum() / 3
+            historical_DMT.append(DMT)
+        # Organize into dataframe
+        historical_DMT_df = pd.DataFrame({"date":historical_dates[2:],
+                                          "DMT":historical_DMT})
+        # Add a month day column
+        historical_DMT_df['month_day'] = historical_DMT_df.date.dt.strftime('%m-%d')
+        # Group by month day and calculate 95th of DMT
+        T95_by_day = (
+            historical_DMT_df
+            .groupby("month_day")["DMT"]
+            .quantile(.95)
+            .reset_index(name="T95")
+        )
+        # Add a month_day column to site temperature (not historical)
+        site_temperature['month_day'] = site_temperature.TIMESTAMP.dt.strftime('%m-%d')
+        # Merge timeseries data with the DMT 95th quantiles
+        site_temperature = pd.merge(site_temperature,T95_by_day,on="month_day",how="left")
+        # Calculate difference between threshold and observed temperature
+        site_temperature['difference'] = site_temperature.TA_F - site_temperature.T95
+
+        # Now loop through each heatwave
+        cumulative_exceedence = []
+        for i in range(len(site_heatwaves)):
+            # Find date range of heatwaves
+            start = site_heatwaves['start_dates'][i]
+            end = site_heatwaves['end_dates'][i]
+            date_range = pd.date_range(start,end)
+            # Find the corresponding temperatures for these dates
+            heatwave_difference = site_temperature[site_temperature['TIMESTAMP'].isin(date_range)].difference
+            # Replace negative values with zero
+            heatwave_difference[heatwave_difference<0] = 0
+            cumulative_exceedence.append(sum(heatwave_difference))
+        site_heatwaves['cumulative_exceedence'] = cumulative_exceedence
+        heatwave_dictionary[site]['cumulative_exceedence'] = site_heatwaves['cumulative_exceedence']
+    
+    return heatwave_dictionary
     
