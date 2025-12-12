@@ -102,6 +102,11 @@ PRISM_max = PRISM_max.drop(columns=missing_max)
 PRISM_min = PRISM_min.drop(columns=missing_min)
 PRISM_mean = PRISM_mean.drop(columns=missing_avg)
 
+# Pivot longer
+PRISM_max = pd.melt(PRISM_max,id_vars='date',var_name='Site',value_name='hist_TA')
+PRISM_min = pd.melt(PRISM_min,id_vars='date',var_name='Site',value_name='hist_TA')
+PRISM_mean = pd.melt(PRISM_mean,id_vars='date',var_name='Site',value_name='hist_TA')
+
 # Based on low correlation investigations (done in QAQC.py), we now drop 
 # certain sites
 removing_sites = ['US-CAK',"CA-Ca1","US-xHE","US-xDJ","US-ICt","US-Rpf","US-xNW",
@@ -150,6 +155,8 @@ os.chdir("/Users/marleeyork/Documents/project2/data/cleaned/")
 historical_data_max.to_csv("historical_data_max.csv")
 historical_data_min.to_csv("historical_data_min.csv")
 historical_data_mean.to_csv("historical_data_mean.csv")
+df.to_csv("AMF_DD.csv")
+df_hourly.to_csv("AMF_HH.csv")
 
 ###############################################################################
 ##                        Bad Data Edits                                     ##
