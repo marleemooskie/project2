@@ -278,7 +278,7 @@ PRISM_max = PRISM_max.drop(columns=missing_max)
 PRISM_min = PRISM_min.drop(columns=missing_min)
 PRISM_mean = PRISM_mean.drop(columns=missing_avg)
 
-# Pivot PRISM data loner
+# Pivot PRISM data longer
 PRISM_max = pd.melt(PRISM_max,id_vars=['date'],var_name='Site',value_name='PRISM_TA')
 PRISM_min = pd.melt(PRISM_min,id_vars=['date'],var_name='Site',value_name='PRISM_TA')
 PRISM_mean = pd.melt(PRISM_mean,id_vars=['date'],var_name='Site',value_name='PRISM_TA')
@@ -375,20 +375,98 @@ np.corrcoef(valid["TA_F"], valid["ERA_TA"])
 np.corrcoef(PRISM_mean.TA_F,PRISM_mean.PRISM_TA)
 
 # Checking site by site correlation to look for any anomalies
-corr_df = pd.DataFrame(columns=['Site','ERA','PRISM'])
+# Ultimately, MSE indicates closeness between the data, but low correlation
+# can indicate sites that may have really poor data.
+corr_df = pd.DataFrame(columns=['Site','ERA_max','PRISM_max',
+                                'ERA_min','PRISM_min','ERA_mean','PRISM_mean'])
 for site in ERA_max.Site.unique():
-    this_site_ERA = ERA_max[ERA_max['Site']==site]
-    this_site_PRISM = PRISM_max[PRISM_max['Site']==site]
-    ERA_corr = round(np.corrcoef(this_site_ERA.max_temperature,this_site_ERA.ERA_max)[0][1],2)
-    PRISM_corr = round(np.corrcoef(this_site_PRISM.max_temperature,this_site_PRISM.PRISM_max)[0][1],2)
-    corr_df.loc[len(corr_df)] = [site,ERA_corr,PRISM_corr]
+    # Isolate all the max, min, and mean ERA and PRISM data for those sites
+    site_ERA_max = ERA_max[ERA_max['Site']==site]
+    site_ERA_min = ERA_min[ERA_min['Site']==site]
+    site_ERA_mean = ERA_mean[ERA_mean['Site']==site]
+    site_PRISM_max = PRISM_max[PRISM_max['Site']==site]
+    site_PRISM_min = PRISM_min[PRISM_min['Site']==site]
+    site_PRISM_mean = PRISM_mean[PRISM_mean['Site']==site]
+    
+    # Calculate the correlations with AmeriFlux data for each
+    correlations = [site,
+                    round(np.corrcoef(site_ERA_max.max_temperature,site_ERA_max.ERA_TA)[0][1],2),
+                    round(np.corrcoef(site_PRISM_max.max_temperature,site_PRISM_max.PRISM_TA)[0][1],2),
+                    round(np.corrcoef(site_ERA_min.min_temperature,site_ERA_min.ERA_TA)[0][1],2),
+                    round(np.corrcoef(site_PRISM_min.min_temperature,site_PRISM_min.PRISM_TA)[0][1],2),
+                    round(np.corrcoef(site_ERA_mean.TA_F,site_ERA_mean.ERA_TA)[0][1],2),
+                    round(np.corrcoef(site_PRISM_mean.TA_F,site_PRISM_mean.PRISM_TA)[0][1],2)]
+    
+    # Add to the dataframe of site correlations
+    corr_df.loc[len(corr_df)] = correlations
+    
+# If a site has less than .9 correlation, it is flagged and we are going to check
+# the ameriflux and reanalysis data closer.
+flag_sites = corr_df[(corr_df.drop(columns="Site") < 0.9).any(axis=1)].Site  
+corr_df[corr_df['Site'].isin(flag_sites)]
+
+# Plotting these sites to assess difference in temperature
+for site in further_investigation:
+    # Isolate the data
+    site_ERA_max = ERA_max[ERA_max['Site']==site]
+    site_ERA_min = ERA_min[ERA_min['Site']==site]
+    site_ERA_mean = ERA_mean[ERA_mean['Site']==site]
+    site_PRISM_max = PRISM_max[PRISM_max['Site']==site]
+    site_PRISM_min = PRISM_min[PRISM_min['Site']==site]
+    site_PRISM_mean = PRISM_mean[PRISM_mean['Site']==site]
+    
+    # Plot!
+    fig, ax = plt.subplots(3,1,figsize=(12,8))
+    ax = ax.flatten()
+
+    ax[0].scatter(site_ERA_max.date,site_ERA_max.max_temperature,c='black',s=.05,label="AMF")
+    ax[0].scatter(site_ERA_max.date,site_ERA_max.ERA_TA,c="red",s=.05,label="ERA")
+    ax[0].scatter(site_PRISM_max.date,site_PRISM_max.PRISM_TA,c="blue",s=.05,label="PRISM")
+    ax[0].set_title(f"{site} max temperature")
+    
+    ax[1].scatter(site_ERA_min.date,site_ERA_min.min_temperature,c="black",s=.05,label="AMF")
+    ax[1].scatter(site_ERA_min.date,site_ERA_min.ERA_TA,c="red",s=.05,label="ERA")
+    ax[1].scatter(site_PRISM_min.date,site_PRISM_min.PRISM_TA,c="blue",s=.05,label="PRISM")
+    ax[1].set_title(f"{site} min temperature")
+    
+    ax[2].scatter(site_ERA_mean.date,site_ERA_mean.TA_F,c="black",s=.05,label="AMF")
+    ax[2].scatter(site_ERA_mean.date,site_ERA_mean.ERA_TA,c="red",s=.05,label="ERA")
+    ax[2].scatter(site_PRISM_mean.date,site_PRISM_mean.PRISM_TA,c="blue",s=.05,label="PRISM")
+    ax[2].set_title(f"{site} mean temperature")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+    
+    input("Press [enter] to continue...")
+    
+# After investigation of the low correlation sites, these are the ones to be removed.
+removing_sites = ['US-CAK',"CA-Ca1","US-xHE","US-xDJ","US-ICt","US-Rpf","US-xNW",
+                  "US-ICh","US-Hn2","US-EML","US-BZS","US-NGC","US-Cop","CA-SCC",
+                  "CA-NS2","US-SP1","US-Ho1"]   
+further_investigation = set(flag_sites) - set(removing_sites)
+
+# Clean these sites out of each data set
+ERA_max = ERA_max[~ERA_max.Site.isin(removing_sites)]
+ERA_min = ERA_min[~ERA_min.Site.isin(removing_sites)]
+ERA_mean = ERA_mean[~ERA_mean.Site.isin(removing_sites)]
+PRISM_max = PRISM_max[~PRISM_max.Site.isin(removing_sites)]
+PRISM_min = PRISM_min[~PRISM_min.Site.isin(removing_sites)]
+PRISM_mean = PRISM_mean[~PRISM_mean.Site.isin(removing_sites)]
 
 # Finding whether the ERA or PRISM data is better
-preference = []
+preference_max = []
+preference_min = []
+preference_mean = []
 for i in range(len(corr_df)):
-    site_preference = 'PRISM' if (corr_df.PRISM[i] >= corr_df.ERA[i]) else 'ERA'
-    preference.append(site_preference)
-corr_df['preference'] = preference
+    site_preference_max = 'PRISM' if (corr_df.PRISM_max[i] >= corr_df.ERA_max[i]) else 'ERA'
+    site_preference_min = 'PRISM' if (corr_df.PRISM_min[i] >= corr_df.ERA_min[i]) else 'ERA'
+    site_preference_mean = 'PRISM' if (corr_df.PRISM_mean[i] >= corr_df.ERA_mean[i]) else 'ERA'
+    preference_max.append(site_preference_max)
+    preference_min.append(site_preference_min)
+    preference_mean.append(site_preference_mean)
+corr_df['preference_max'] = preference_max
+corr_df['preference_min'] = preference_min
+corr_df['preference_mean'] = preference_mean
 
 # Since the ERA data is preferred everytime, we are going to move forward with that
 # Finding the 95th percentile for each

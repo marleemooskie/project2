@@ -21,10 +21,6 @@ df = loadAMF(path='/Users/marleeyork/Documents/project2/data/AMFdataDD',
 df_hourly = loadAMF(path='/Users/marleeyork/Documents/project2/data/AMFdata_HH',
                  measures=['TIMESTAMP_START','TA_F'])
 
-# Loading in historical mean data from PRISM
-# Need to include Canada data with this eventually
-historical_tmean = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/extracted_daily_tmean.csv")
-
 # Load the IGBP data and merge to df
 # site_data = pd.read_csv("/Users/marleeyork/Documents/project2/data/site_list.csv",encoding='latin1')
 # IGBP = site_data[['Site ID','Vegetation Abbreviation (IGBP)']]
@@ -34,15 +30,126 @@ historical_tmean = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/
 # Loading IGBP for the long list of sites
 IGBP = loadBADM(path="/Users/marleeyork/Documents/project2/data/BADM",skip=[''],
                 column='VARIABLE',value='DATAVALUE',measure=['IGBP'],file_type='xslx')
-df = pd.merge(df,IGBP,on='Site',how='inner').drop_duplicates()
+df = pd.merge(df,IGBP,on='Site',how='left').drop_duplicates()
+df_hourly = pd.merge(df_hourly,IGBP,on='Site',how='left').drop_duplicates()
 
-df.columns
-df.shape
-df.Site.unique()
+# Drop any croplands from the AmeriFlux data
+df = df[df['IGBP']!='CRO']
+df_hourly = df_hourly[df_hourly['IGBP']!='CRO']
+
+
+###############################################################################
+##                        Historical Data QAQC                               ##
+###############################################################################
+# Load in the data
+ERA_max = pd.read_csv("/Users/marleeyork/Documents/project2/data/ERA/ERA_tmax_data.csv")
+ERA_min = pd.read_csv("/Users/marleeyork/Documents/project2/data/ERA/ERA_tmin_data.csv")
+ERA_mean = pd.read_csv("/Users/marleeyork/Documents/project2/data/ERA/ERA_tmean_data.csv")
+PRISM_max = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/extracted_daily_climate_data_tmax.csv")
+PRISM_min = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/extracted_daily_tmin_data_wide.csv")
+PRISM_mean = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/extracted_daily_tmean.csv")
+AMF_mean = df[['Site','TIMESTAMP','TA_F']]
+AMF_mean.columns = ['Site','date','TA_F']
+
+
+# Transform ERA temperature from Kelvin to C
+ERA_max['ERA_TA'] = ERA_max["t2m"] - 273.15
+ERA_min['ERA_TA'] = ERA_min["t2m"] - 273.15
+ERA_mean['ERA_TA'] = ERA_mean["t2m"] - 273.15
+
+# Transform dates into datetime variables
+ERA_max['date'] = pd.to_datetime(ERA_max.valid_time)
+ERA_min['date'] = pd.to_datetime(ERA_min.valid_time)
+ERA_mean['date'] = pd.to_datetime(ERA_mean.valid_time)
+PRISM_max['date'] = pd.to_datetime(PRISM_max.date)
+PRISM_min['date'] = pd.to_datetime(PRISM_min.date)
+PRISM_mean['date'] = pd.to_datetime(PRISM_mean.date)
+
+# Reduce down to columns of interest
+ERA_max = ERA_max[['Site','date','ERA_TA']]
+ERA_min = ERA_min[['Site','date','ERA_TA']]
+ERA_mean = ERA_mean[['Site','date','ERA_TA']]
+
+# Drop any sites that aren't in df
+included_sites = df.Site.unique()
+included_sites = np.insert(included_sites,0,'date')
+ERA_max = ERA_max[ERA_max['Site'].isin(included_sites)]
+ERA_min = ERA_min[ERA_min['Site'].isin(included_sites)]
+ERA_mean = ERA_mean[ERA_mean['Site'].isin(included_sites)]
+PRISM_max = PRISM_max[included_sites]
+PRISM_min = PRISM_min[included_sites]
+PRISM_mean = PRISM_mean[included_sites]
+
+# Findig which sites have missing values in PRISM data
+search_value = -9999
+missing_max = []
+missing_min = []
+missing_avg = []
+for col in PRISM_max.columns:
+    # Check if the search_value exists in the current column
+    if PRISM_max[col].astype(str).str.contains(str(search_value)).any():
+        missing_max.append(col)
+
+for col in PRISM_min.columns:
+    if PRISM_min[col].astype(str).str.contains(str(search_value)).any():
+        missing_min.append(col)
+
+for col in PRISM_mean.columns:
+    if PRISM_mean[col].astype(str).str.contains(str(search_value)).any():
+        missing_avg.append(col)
+        
+PRISM_max = PRISM_max.drop(columns=missing_max)
+PRISM_min = PRISM_min.drop(columns=missing_min)
+PRISM_mean = PRISM_mean.drop(columns=missing_avg)
+
+# Based on low correlation investigations (done in QAQC.py), we now drop 
+# certain sites
+removing_sites = ['US-CAK',"CA-Ca1","US-xHE","US-xDJ","US-ICt","US-Rpf","US-xNW",
+                  "US-ICh","US-Hn2","US-EML","US-BZS","US-NGC","US-Cop","CA-SCC",
+                  "CA-NS2","US-SP1","US-Ho1"]
+
+ERA_max = ERA_max[~ERA_max.Site.isin(removing_sites)]
+ERA_min = ERA_min[~ERA_min.Site.isin(removing_sites)]
+ERA_mean = ERA_mean[~ERA_mean.Site.isin(removing_sites)]
+PRISM_max = PRISM_max[~PRISM_max.Site.isin(removing_sites)]
+PRISM_min = PRISM_min[~PRISM_min.Site.isin(removing_sites)]
+PRISM_mean = PRISM_mean[~PRISM_mean.Site.isin(removing_sites)]
+
+# Restrict AMF sites to those we have long-term data for
+df_hourly = df_hourly[df_hourly.Site.isin(ERA_max.Site.unique())]
+df = df[df.Site.isin(ERA_max.Site.unique())]
+df.columns = ['date','TA_F','SW_IN_F','VPD_F','P_F','NEE_VUT_REF','RECO_NT_VUT_REF',
+             'GPP_NT_VUT_REF','Site','IGBP']
+
+# Quick check that all of the datasets have the correct number of sites
+len(df_hourly.Site.unique())
 len(df.Site.unique())
-df.IGBP.unique()
+len(ERA_max.Site.unique())
+len(ERA_min.Site.unique())
+len(ERA_mean.Site.unique())
+len(PRISM_max.Site.unique())
+len(PRISM_min.Site.unique())
+len(PRISM_mean.Site.unique())
 
-# I'm commenting out below to fit the heatwaves to everything
+# Determine which site is better (ERA or PRISM) for each site
+historical_data_max, data_source_max = return_best_data(AMF_data_all = df_hourly[['Site','TIMESTAMP_START','TA_F']],
+                                                        ERA_data_all = ERA_max[['Site','date','ERA_TA']],
+                                                        PRISM_data_all = PRISM_max[['Site','date','PRISM_TA']],
+                                                        temperature_type = 'max')
+historical_data_min, data_source_min = return_best_data(AMF_data_all = df_hourly[['Site','TIMESTAMP_START','TA_F']],
+                                                        ERA_data_all = ERA_min[['Site','date','ERA_TA']],
+                                                        PRISM_data_all = PRISM_min[['Site','date','PRISM_TA']],
+                                                        temperature_type = 'min')
+historical_data_mean, data_source_mean = return_best_data(AMF_data_all = df[['Site','date','TA_F']],
+                                                        ERA_data_all = ERA_mean[['Site','date','ERA_TA']],
+                                                        PRISM_data_all = PRISM_mean[['Site','date','PRISM_TA']],
+                                                        temperature_type = 'average')
+
+# Now we save this data for future heatwave definition use
+os.chdir("/Users/marleeyork/Documents/project2/data/cleaned/")
+historical_data_max.to_csv("historical_data_max.csv")
+historical_data_min.to_csv("historical_data_min.csv")
+historical_data_mean.to_csv("historical_data_mean.csv")
 
 ###############################################################################
 ##                        Bad Data Edits                                     ##
@@ -52,8 +159,6 @@ df.IGBP.unique()
 mask = df.apply(lambda col: col == -9999).any(axis=1)
 df = df[~mask]
 
-# Dropping US-Ne1, not sure why its in here
-df = df[df['IGBP']!='CRO']
 '''
 # If GPP is negative, set it to 0
 df.loc[df['GPP_NT_VUT_REF']<0,'GPP_NT_VUT_REF'] = 0

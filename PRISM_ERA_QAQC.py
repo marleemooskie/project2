@@ -101,7 +101,7 @@ def return_best_data(AMF_data_all,ERA_data_all,PRISM_data_all,temperature_type):
     AMF_data_all : TYPE
         DESCRIPTION. Dataframe of all hourly AmeriFlux data across sites if temperature
         type is maximum or minimum, or daily data for if temperature type is average.
-        This should have three columns: Site, TIMESTAMP_START, and TA_f
+        This should have three columns: Site, TIMESTAMP_START, and TA_F
     ERA_data_all : TYPE
         DESCRIPTION. Dataframe of all ERA data across sites. 
         This should have 3 columns: Site, date, and ERA_TA.
@@ -137,11 +137,11 @@ def return_best_data(AMF_data_all,ERA_data_all,PRISM_data_all,temperature_type):
             site_AMF_data['Site'] = [site] * len(site_AMF_data)
             site_AMF_data.columns = ['date','AMF_TA','Site']
         elif (temperature_type == "min"):
-            site_AMF_data = find_min_temperature(AMF_data_all.TIMESTAMP_START,AMF_data_all.TA_F)
+            site_AMF_data = find_min_temperatures(AMF_data_all.TIMESTAMP_START,AMF_data_all.TA_F)
             site_AMF_data['Site'] = [site] * len(site_AMF_data)
+            site_AMF_data.columns = ['date','AMF_TA','Site']
         elif (temperature_type == "average"):
-            site_AMF_data = site_AMF_data
-    
+            site_AMF_data.columns = ['Site','date','AMF_TA']
         else:
             print("Incorrect input for temperature type. Choose max, min, or average.")
     
