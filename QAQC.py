@@ -214,7 +214,7 @@ ERA_max = pd.read_csv("/Users/marleeyork/Documents/project2/data/ERA/ERA_tmax_da
 ERA_min = pd.read_csv("/Users/marleeyork/Documents/project2/data/ERA/ERA_tmin_data.csv")
 ERA_mean = pd.read_csv("/Users/marleeyork/Documents/project2/data/ERA/ERA_tmean_data.csv")
 PRISM_max = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/extracted_daily_climate_data_tmax.csv")
-PRISM_min = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/extracted_daily_tmin_data_wide.csv")
+PRISM_min = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/extracted_daily_tmin.csv")
 PRISM_mean = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/extracted_daily_tmean.csv")
 
 # Transform ERA temperature from Kelvin to C
@@ -315,47 +315,56 @@ PRISM_max = pd.merge(AMF_max, PRISM_max, on=['Site','date'],how="left")
 PRISM_min = pd.merge(AMF_min,PRISM_min, on=['Site','date'],how="left")
 PRISM_mean = pd.merge(AMF_mean,PRISM_mean, on=['Site','date'],how="left")
 
+# Rename columns
+ERA_max.columns = ['Site','date','max_temperature','hist_TA']
+ERA_min.columns = ['Site','date','min_temperature','hist_TA']
+ERA_mean.columns = ['Site','date','TA_F','hist_TA']
+
 # Drop those sites that we don't have for ERA and PRISM
-mask = ~PRISM_max.PRISM_TA.isna()
+mask = ~PRISM_max.hist_TA.isna()
 PRISM_max = PRISM_max[mask]
-mask = ~PRISM_min.PRISM_TA.isna()
+mask = ~PRISM_min.hist_TA.isna()
 PRISM_min = PRISM_min[mask]
-mask = ~PRISM_mean.PRISM_TA.isna()
+mask = ~PRISM_mean.hist_TA.isna()
 PRISM_mean = PRISM_mean[mask]
 
-mask = ~ERA_max.ERA_TA.isna()
+mask = ~ERA_max.hist_TA.isna()
 ERA_max = ERA_max[mask]
-mask = ~ERA_min.ERA_TA.isna()
+mask = ~ERA_min.hist_TA.isna()
 ERA_min = ERA_min[mask]
-mask = ~ERA_mean.ERA_TA.isna()
+mask = ~ERA_mean.hist_TA.isna()
 ERA_mean = ERA_mean[mask]
 
 # Lets look at the overall correlation of ERA and PRISM with AmeriFlux data now
 fig, ax = plt.subplots(3,2,figsize=(8,12))
 ax = ax.flatten()
-ax[0].scatter(ERA_max.max_temperature,ERA_max.ERA_TA, s=.5,alpha=.1)
+ax[0].scatter(ERA_max.max_temperature,ERA_max.hist_TA, s=.5,alpha=.1)
 ax[0].plot([-30, 50], [-30, 50], '--',c='red')
 ax[0].set_xlabel("AMF Max Temperature")
 ax[0].set_ylabel("ERA Max Temperature")
 ax[0].set_title("ERA")
-ax[1].scatter(PRISM_max.max_temperature,PRISM_max.PRISM_TA,s=.5,alpha=.1)
+ax[1].scatter(PRISM_max.max_temperature,PRISM_max.hist_TA,s=.5,alpha=.1)
 ax[1].plot([-30, 50], [-30, 50], '--',c='red')
 ax[1].set_xlabel("AMF Max Temperature")
 ax[1].set_ylabel("PRISM Max Temperature")
 ax[1].set_title("PRISM")
-ax[2].scatter(ERA_min.min_temperature,ERA_min.ERA_TA, s=.5,alpha=.1)
+ax[2].scatter(ERA_min.min_temperature,ERA_min.hist_TA, s=.5,alpha=.1)
 ax[2].plot([-30, 50], [-30, 50], '--',c='red')
+ax[2].set_xlim(-30,50)
+ax[2].set_ylim(-30,50)
 ax[2].set_xlabel("AMF Min Temperature")
 ax[2].set_ylabel("ERA Min Temperature")
-ax[3].scatter(PRISM_min.min_temperature,PRISM_min.PRISM_TA,s=.5,alpha=.1)
+ax[3].scatter(PRISM_min.min_temperature,PRISM_min.hist_TA,s=.5,alpha=.1)
 ax[3].plot([-30, 50], [-30, 50], '--',c='red')
+ax[3].set_xlim(-30,50)
+ax[3].set_ylim(-30,50)
 ax[3].set_xlabel("AMF Min Temperature")
 ax[3].set_ylabel("PRISM Min Temperature")
-ax[4].scatter(ERA_mean.TA_F,ERA_mean.ERA_TA, s=.5,alpha=.1)
+ax[4].scatter(ERA_mean.TA_F,ERA_mean.hist_TA, s=.5,alpha=.1)
 ax[4].plot([-30, 50], [-30, 50], '--',c='red')
 ax[4].set_xlabel("AMF Mean Temperature")
 ax[4].set_ylabel("ERA Mean Temperature")
-ax[5].scatter(PRISM_mean.TA_F,PRISM_mean.PRISM_TA,s=.5,alpha=.1)
+ax[5].scatter(PRISM_mean.TA_F,PRISM_mean.hist_TA,s=.5,alpha=.1)
 ax[5].plot([-30, 50], [-30, 50], '--',c='red')
 ax[5].set_xlabel("AMF Mean Temperature")
 ax[5].set_ylabel("PRISM Mean Temperature")
@@ -364,15 +373,15 @@ plt.show()
 
 # Checking the overall correlation coefficient
 # Correlation is 93%, which is pretty good
-np.corrcoef(ERA_max.max_temperature,ERA_max.ERA_TA)
-np.corrcoef(PRISM_max.max_temperature,PRISM_max.PRISM_TA)
+np.corrcoef(ERA_max.max_temperature,ERA_max.hist_TA)
+np.corrcoef(PRISM_max.max_temperature,PRISM_max.hist_TA)
 
-np.corrcoef(ERA_min.min_temperature,ERA_min.ERA_TA)
-np.corrcoef(PRISM_min.min_temperature,PRISM_min.PRISM_TA)
+np.corrcoef(ERA_min.min_temperature,ERA_min.hist_TA)
+np.corrcoef(PRISM_min.min_temperature,PRISM_min.hist_TA)
 
-valid = ERA_mean[["TA_F", "ERA_TA"]].dropna()
-np.corrcoef(valid["TA_F"], valid["ERA_TA"])
-np.corrcoef(PRISM_mean.TA_F,PRISM_mean.PRISM_TA)
+valid = ERA_mean[["TA_F", "hist_TA"]].dropna()
+np.corrcoef(valid["TA_F"], valid["hist_TA"])
+np.corrcoef(PRISM_mean.TA_F,PRISM_mean.hist_TA)
 
 # Checking site by site correlation to look for any anomalies
 # Ultimately, MSE indicates closeness between the data, but low correlation
@@ -390,12 +399,12 @@ for site in ERA_max.Site.unique():
     
     # Calculate the correlations with AmeriFlux data for each
     correlations = [site,
-                    round(np.corrcoef(site_ERA_max.max_temperature,site_ERA_max.ERA_TA)[0][1],2),
-                    round(np.corrcoef(site_PRISM_max.max_temperature,site_PRISM_max.PRISM_TA)[0][1],2),
-                    round(np.corrcoef(site_ERA_min.min_temperature,site_ERA_min.ERA_TA)[0][1],2),
-                    round(np.corrcoef(site_PRISM_min.min_temperature,site_PRISM_min.PRISM_TA)[0][1],2),
-                    round(np.corrcoef(site_ERA_mean.TA_F,site_ERA_mean.ERA_TA)[0][1],2),
-                    round(np.corrcoef(site_PRISM_mean.TA_F,site_PRISM_mean.PRISM_TA)[0][1],2)]
+                    round(np.corrcoef(site_ERA_max.max_temperature,site_ERA_max.hist_TA)[0][1],2),
+                    round(np.corrcoef(site_PRISM_max.max_temperature,site_PRISM_max.hist_TA)[0][1],2),
+                    round(np.corrcoef(site_ERA_min.min_temperature,site_ERA_min.hist_TA)[0][1],2),
+                    round(np.corrcoef(site_PRISM_min.min_temperature,site_PRISM_min.hist_TA)[0][1],2),
+                    round(np.corrcoef(site_ERA_mean.TA_F,site_ERA_mean.hist_TA)[0][1],2),
+                    round(np.corrcoef(site_PRISM_mean.TA_F,site_PRISM_mean.hist_TA)[0][1],2)]
     
     # Add to the dataframe of site correlations
     corr_df.loc[len(corr_df)] = correlations

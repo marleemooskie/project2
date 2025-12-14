@@ -6,6 +6,7 @@ import os
 os.chdir("/Users/marleeyork/Documents/project2")
 from load_data import *
 from heatwave_QAQC import *
+from PRISM_ERA_QAQC import *
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.pyplot as plt
@@ -37,7 +38,6 @@ df_hourly = pd.merge(df_hourly,IGBP,on='Site',how='left').drop_duplicates()
 df = df[df['IGBP']!='CRO']
 df_hourly = df_hourly[df_hourly['IGBP']!='CRO']
 
-
 ###############################################################################
 ##                        Historical Data QAQC                               ##
 ###############################################################################
@@ -46,7 +46,7 @@ ERA_max = pd.read_csv("/Users/marleeyork/Documents/project2/data/ERA/ERA_tmax_da
 ERA_min = pd.read_csv("/Users/marleeyork/Documents/project2/data/ERA/ERA_tmin_data.csv")
 ERA_mean = pd.read_csv("/Users/marleeyork/Documents/project2/data/ERA/ERA_tmean_data.csv")
 PRISM_max = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/extracted_daily_climate_data_tmax.csv")
-PRISM_min = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/extracted_daily_tmin_data_wide.csv")
+PRISM_min = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/extracted_daily_tmin.csv")
 PRISM_mean = pd.read_csv("/Users/marleeyork/Documents/project2/data/PRISM/extracted_daily_tmean.csv")
 AMF_mean = df[['Site','TIMESTAMP','TA_F']]
 AMF_mean.columns = ['Site','date','TA_F']
@@ -76,9 +76,10 @@ included_sites = np.insert(included_sites,0,'date')
 ERA_max = ERA_max[ERA_max['Site'].isin(included_sites)]
 ERA_min = ERA_min[ERA_min['Site'].isin(included_sites)]
 ERA_mean = ERA_mean[ERA_mean['Site'].isin(included_sites)]
-PRISM_max = PRISM_max[included_sites]
-PRISM_min = PRISM_min[included_sites]
-PRISM_mean = PRISM_mean[included_sites]
+PRISM_included_sites = included_sites[pd.Series(included_sites).isin(PRISM_mean.columns)]
+PRISM_max = PRISM_max[PRISM_included_sites]
+PRISM_min = PRISM_min[PRISM_included_sites]
+PRISM_mean = PRISM_mean[PRISM_included_sites]
 
 # Findig which sites have missing values in PRISM data
 search_value = -9999
@@ -103,15 +104,15 @@ PRISM_min = PRISM_min.drop(columns=missing_min)
 PRISM_mean = PRISM_mean.drop(columns=missing_avg)
 
 # Pivot longer
-PRISM_max = pd.melt(PRISM_max,id_vars='date',var_name='Site',value_name='hist_TA')
-PRISM_min = pd.melt(PRISM_min,id_vars='date',var_name='Site',value_name='hist_TA')
-PRISM_mean = pd.melt(PRISM_mean,id_vars='date',var_name='Site',value_name='hist_TA')
+PRISM_max = pd.melt(PRISM_max,id_vars='date',var_name='Site',value_name='PRISM_TA')
+PRISM_min = pd.melt(PRISM_min,id_vars='date',var_name='Site',value_name='PRISM_TA')
+PRISM_mean = pd.melt(PRISM_mean,id_vars='date',var_name='Site',value_name='PRISM_TA')
 
 # Based on low correlation investigations (done in QAQC.py), we now drop 
 # certain sites
 removing_sites = ['US-CAK',"CA-Ca1","US-xHE","US-xDJ","US-ICt","US-Rpf","US-xNW",
                   "US-ICh","US-Hn2","US-EML","US-BZS","US-NGC","US-Cop","CA-SCC",
-                  "CA-NS2","US-SP1","US-Ho1"]
+                  "CA-NS2","US-SP1","US-Ho1","US-Me2"]
 
 ERA_max = ERA_max[~ERA_max.Site.isin(removing_sites)]
 ERA_min = ERA_min[~ERA_min.Site.isin(removing_sites)]
