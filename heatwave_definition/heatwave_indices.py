@@ -2,11 +2,13 @@
 This script will calculate magitude and intensities of each heatwave.
 '''
 import pandas as pd
+from define_heatwaves import *
 
-def cumulative_exceedence(heatwaves_dictionary, daily_AMF_TA, historical_data):
+def cumulative_exceedence(heatwaves_dictionary, AMF_TA, historical_data, method):
     '''
-    This function integrates over a certain variable during a heatwave and takes
-    the average of it.
+    This function integrates over a heatwave and returns the summed and average 
+    deviation from th 95th percentile of historical temperature for that day. This
+    can be applied to mean, minimum, or maximum temperatures.
     
     Parameters
     ----------
@@ -19,6 +21,10 @@ def cumulative_exceedence(heatwaves_dictionary, daily_AMF_TA, historical_data):
     
     historical_temperatures : TYPE
         DESCRIPTION. list of all dates corresponding to historical data
+        
+    method : str
+        DESCRIPTION. Either 'max','min', or 'mean', based on the temperature measure
+        we are interested in.
     
     Returns
     -------
@@ -28,12 +34,27 @@ def cumulative_exceedence(heatwaves_dictionary, daily_AMF_TA, historical_data):
         Day-intensified, Day-Night Spike, and Triad
 
     '''
+    # Initialize dataframe for all heatwaves
+    heatwave_indices = pd.DataFrame(columns=['Site','start_dates','end_dates',
+                                             'cumulative_exceedence','average_exceedence'])
     
     for site in heatwaves_dictionary.keys():
+        print(f"Integrating over site {site}")
+        if (method=='max'):
+            site_hourly_temp = AMF_TA[AMF_TA.Site==site].TA_F
+            site_hourly_date = AMF_TA[AMF_TA.Site==site].TIMESTAMP_START
+            site_temperature = find_max_temperatures(site_hourly_date,site_hourly_temp)
+            site_temperature.columns = ['date','TA_F']
+        elif (method=='min'):
+            site_hourly_temp = AMF_TA[AMF_TA.Site==site].TA_F
+            site_hourly_date = AMF_TA[AMF_TA.Site==site].TIMESTAMP_START
+            site_temperature = find_min_temperatures(site_hourly_date,site_hourly_temp)
+            site_temperature.columns = ['date','TA_F']
+        else:
+            site_temperature = AMF_TA[AMF_TA.Site==site]
+            
         # Pull out the dictionary for that site
         site_dictionary = heatwaves_dictionary[site]
-        site_temperature = daily_AMF_TA[daily_AMF_TA['Site']==site]
-        site_temperature['date'] = pd.to_datetime(site_temperature['date'])
         site_historical = historical_data[historical_data['Site']==site]
         historical_temperature = site_historical['hist_TA']
         historical_dates = pd.to_datetime(site_historical['date'])
@@ -78,8 +99,11 @@ def cumulative_exceedence(heatwaves_dictionary, daily_AMF_TA, historical_data):
             cumulative_exceedence.append(sum(heatwave_difference))
             average_exceedence.append(sum(heatwave_difference) / len(heatwave_difference))
         site_heatwaves['cumulative_exceedence'] = cumulative_exceedence
-        site_heatwaves['average_exceedence']
-        heatwave_dictionary[site]['cumulative_exceedence'] = site_heatwaves['cumulative_exceedence']
+        site_heatwaves['average_exceedence'] = average_exceedence
+        site_heatwaves['Site'] = [site]*len(site_heatwaves)
     
-    return heatwave_dictionary
+        # Concat the site heatwaves with all heatwaves
+        heatwave_indices = pd.concat([heatwave_indices,site_heatwaves])
+    
+    return heatwave_indices
     

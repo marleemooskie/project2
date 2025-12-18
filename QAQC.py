@@ -49,6 +49,39 @@ for site in df.Site.unique():
     input("Press [Enter] to continue...")
     
 ###############################################################################
+##                          HEATWAVE CHECK                                   ##
+###############################################################################
+# We are going to plot the heatwaves at each site
+for site in heatwave_df.Site.unique():
+    site_EHF = heatwave_df[(heatwave_df.Site==site) & (heatwave_df.Method=='EHF')]
+    site_max = heatwave_df[(heatwave_df.Site==site) & (heatwave_df.Method=='Max')]
+    site_min = heatwave_df[(heatwave_df.Site==site) & (heatwave_df.Method=='Min')]
+    site_df = df[df.Site==site]
+    
+    fig, ax = plt.subplots(3,1)
+    ax[0].scatter(site_df.date,site_df.TA_F,s=.5)
+    for row in site_EHF[['start_dates','end_dates']].itertuples(index=False):
+        start, end = row
+        date_range = pd.date_range(start,end)
+        ax[0].scatter(site_df[site_df.date.isin(date_range)].date,site_df[site_df.date.isin(date_range)].TA_F,c='red',s=.5)
+    ax[0].set_title(f"Average Temperature Heatwaves for {site}")
+    ax[1].scatter(site_df.date,site_df.TA_F,s=.5)
+    for row in site_max[['start_dates','end_dates']].itertuples(index=False):
+        start, end = row
+        date_range = pd.date_range(start,end)
+        ax[1].scatter(site_df[site_df.date.isin(date_range)].date,site_df[site_df.date.isin(date_range)].TA_F,c='red',s=.5)
+    ax[1].set_title(f"Max Temperature Heatwaves for {site}")
+    ax[2].scatter(site_df.date,site_df.TA_F,s=.5)
+    for row in site_min[['start_dates','end_dates']].itertuples(index=False):
+        start, end = row
+        date_range = pd.date_range(start,end)
+        ax[2].scatter(site_df[site_df.date.isin(date_range)].date,site_df[site_df.date.isin(date_range)].TA_F,c='red',s=.5)
+    ax[2].set_title(f"Min Temperature Heatwaves for {site}")
+    plt.tight_layout()
+    plt.show()
+    input("Press [enter] to continue...")
+    
+###############################################################################
 ##                         TEMPERATURE QC CHECK                              ##
 ###############################################################################
 '''
@@ -241,9 +274,10 @@ included_sites = np.insert(included_sites,0,'date')
 ERA_max = ERA_max[ERA_max['Site'].isin(included_sites)]
 ERA_min = ERA_min[ERA_min['Site'].isin(included_sites)]
 ERA_mean = ERA_mean[ERA_mean['Site'].isin(included_sites)]
-PRISM_max = PRISM_max[included_sites]
-PRISM_min = PRISM_min[included_sites]
-PRISM_mean = PRISM_mean[included_sites]
+included_PRISM_sites = included_sites[pd.Series(included_sites).isin(PRISM_max.columns)]
+PRISM_max = PRISM_max[included_PRISM_sites]
+PRISM_min = PRISM_min[included_PRISM_sites]
+PRISM_mean = PRISM_mean[included_PRISM_sites]
 
 # Findig which sites have missing values in PRISM data
 search_value = -9999
@@ -579,8 +613,134 @@ plt.show()
 find_shared_variables_longfile(path="/Users/marleeyork/Documents/project2/data/BADM",
                                measures=["IGBP"],column='VARIABLE',value='DATAVALUE',file_type='xslx')
 
-# Load in the data and grab the IGBP
+###############################################################################
+##                         INVALID HEATWAVES CHECK                           ##
+###############################################################################
+os.chdir("/Users/marleeyork/Documents/project2/data/heatwaves/")
+invalid_heatwaves_min = pd.read_csv("invalid_heatwaves_min.csv")
+invalid_heatwaves_max = pd.read_csv("invalid_heatwaves_max.csv")
+invalid_heatwaves_mean = pd.read_csv("invalid_heatwaves_mean.csv")
 
+# Calculate percentages of invalid heatwaves at each site
+invalid_percentages_min = pd.DataFrame(columns=['Site','invalid_perc'])
+for site in heatwaves_min.keys():
+    # Pull the number overall and invalid
+    num_heatwaves = len(heatwaves_min[site]['start_dates'])
+    num_invalid = len(invalid_heatwaves_min[invalid_heatwaves_min.Site==site])
+    # Calculate percentage of invalid heatwaves at site
+    if num_heatwaves > 0:
+        invalid_perc = num_invalid / num_heatwaves
+    else:
+        invalid_perc = 0
+    # Add to dataframe
+    invalid_percentages_min.loc[len(invalid_percentages_min)] = [site,invalid_perc]
+
+invalid_percentages_mean = pd.DataFrame(columns=['Site','invalid_perc'])
+for site in heatwaves_mean.keys():
+    # Pull the number overall and invalid
+    num_heatwaves = len(heatwaves_mean[site]['start_dates'])
+    num_invalid = len(invalid_heatwaves_mean[invalid_heatwaves_mean.Site==site])
+    # Calculate percentage of invalid heatwaves at site
+    if num_heatwaves > 0:
+        invalid_perc = num_invalid / num_heatwaves
+    else:
+        invalid_perc = 0
+    # Add to dataframe
+    invalid_percentages_mean.loc[len(invalid_percentages_mean)] = [site,invalid_perc]
+
+invalid_percentages = pd.DataFrame(columns=['Site','invalid_perc'])
+for site in heatwaves.keys():
+    # Pull the number overall and invalid
+    num_heatwaves = len(heatwaves[site]['start_dates'])
+    num_invalid = len(invalid_heatwaves[invalid_heatwaves.Site==site])
+    # Calculate percentage of invalid heatwaves at site
+    if num_heatwaves > 0:
+        invalid_perc = num_invalid / num_heatwaves
+    else:
+        invalid_perc = 0
+    # Add to dataframe
+    invalid_percentages.loc[len(invalid_percentages)] = [site,invalid_perc]
+
+# Sites with a high amount of invalid heatwaves
+invalid_sites_min = invalid_percentages_min[invalid_percentages_min.invalid_perc >= .25].Site
+invalid_sites_mean = invalid_percentages_mean[invalid_percentages_mean.invalid_perc >= .25].Site
+invalid_sites_max = invalid_percentages[invalid_percentages.invalid_perc >= .25].Site
+
+# Find the unique set of sites that have some type of invalidity
+invalid_sites = set(list(invalid_sites_min) + list(invalid_sites_max) + list(invalid_sites_mean))
+
+# Plot the valid and invalid heatwaves for each site for min, max, and mean heatwaves
+for site in invalid_sites:
+    # Isolate data for that site
+    site_df = df[df.Site==site]
+    site_heatwaves_max = heatwaves[site]
+    site_heatwaves_min = heatwaves_min[site]
+    site_heatwaves_mean = heatwaves_mean[site]
+    site_invalid_max = invalid_heatwaves_max[invalid_heatwaves_max.Site==site]
+    site_invalid_min = invalid_heatwaves_min[invalid_heatwaves_min.Site==site]
+    site_invalid_mean = invalid_heatwaves_mean[invalid_heatwaves_mean.Site==site]
+    
+    # Isolate the start and end dates for the heatwaves
+    max_start = site_heatwaves_max['start_dates']
+    max_end = site_heatwaves_max['end_dates']
+    min_start = site_heatwaves_min['start_dates']
+    min_end = site_heatwaves_min['end_dates']
+    mean_start = site_heatwaves_mean['start_dates']
+    mean_end = site_heatwaves_mean['end_dates']
+    
+    # Plot the site daily temperature for each
+    fig, ax = plt.subplots(3,1)
+    ax[0].scatter(site_df.date,site_df.TA_F,s=.5,c='lightgrey')
+    ax[0].set_title(f"Max heatwaves for site {site}")
+    ax[1].scatter(site_df.date,site_df.TA_F,s=.5,c='lightgrey')
+    ax[1].set_title(f"Mean heatwaves for site {site}")
+    ax[2].scatter(site_df.date,site_df.TA_F,s=.5,c='lightgrey')
+    ax[2].set_title(f"Min heatwaves for site {site}")
+    
+    # Plot the valid maximum heatwaves
+    for start, end in zip(max_start,max_end):
+        date_range = pd.date_range(start,end)
+        heatwave_df = site_df[site_df.date.isin(date_range)]
+        ax[0].scatter(heatwave_df.date,heatwave_df.TA_F,s=.5,c='red',label='Valid heatwave')
+    
+    # Plot the invalid maximum heatwaves
+    for row in site_invalid_max[['start_date','end_date']].itertuples(index=False):
+        start, end = row
+        date_range = pd.date_range(start,end)
+        heatwave_df = site_df[site_df.date.isin(date_range)]
+        ax[0].scatter(heatwave_df.date,heatwave_df.TA_F,s=.5,c='blue',label='Invalid heatwave')
+    
+    # Plot the valid mean heatwaves
+    for start, end in zip(mean_start,mean_end):
+        date_range = pd.date_range(start,end)
+        heatwave_df = site_df[site_df.date.isin(date_range)]
+        ax[1].scatter(heatwave_df.date,heatwave_df.TA_F,s=.5,c='red')
+    
+    # Plot the invalid mean heatwaves
+    for row in site_invalid_mean[['start_date','end_date']].itertuples(index=False):
+        start, end = row
+        date_range = pd.date_range(start,end)
+        heatwave_df = site_df[site_df.date.isin(date_range)]
+        ax[1].scatter(heatwave_df.date,heatwave_df.TA_F,s=.5,c='blue')
+    
+    # Plot the valid minimum heatwaves
+    for start, end in zip(min_start,min_end):
+        date_range = pd.date_range(start,end)
+        heatwave_df = site_df[site_df.date.isin(date_range)]
+        ax[2].scatter(heatwave_df.date,heatwave_df.TA_F,s=.5,c='red')
+    
+    # Plot the invalid minimum heatwaves
+    for row in site_invalid_min[['start_date','end_date']].itertuples(index=False):
+        start, end = row
+        date_range = pd.date_range(start,end)
+        heatwave_df = site_df[site_df.date.isin(date_range)]
+        ax[2].scatter(heatwave_df.date,heatwave_df.TA_F,s=.5,c='blue')
+    
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+    
+    input("Press [enter] to continue...")
 
 
 

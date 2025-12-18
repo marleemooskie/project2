@@ -137,19 +137,32 @@ len(PRISM_max.Site.unique())
 len(PRISM_min.Site.unique())
 len(PRISM_mean.Site.unique())
 
+# Get start and end dates for historical data based on shared dates between PRISM and ERA
+start_date = max([ERA_mean.date.min(),PRISM_mean.date.min()])
+end_date = min([ERA_mean.date.max(),PRISM_mean.date.max()])
+
+# This is how long historical data should be for all PRISM or ERA data selected at a site
+len(pd.date_range(start_date,end_date))
+
 # Determine which site is better (ERA or PRISM) for each site
 historical_data_max, data_source_max = return_best_data(AMF_data_all = df_hourly[['Site','TIMESTAMP_START','TA_F']],
                                                         ERA_data_all = ERA_max[['Site','date','ERA_TA']],
                                                         PRISM_data_all = PRISM_max[['Site','date','PRISM_TA']],
-                                                        temperature_type = 'max')
+                                                        temperature_type = 'max',
+                                                        start_date=start_date,
+                                                        end_date=end_date)
 historical_data_min, data_source_min = return_best_data(AMF_data_all = df_hourly[['Site','TIMESTAMP_START','TA_F']],
                                                         ERA_data_all = ERA_min[['Site','date','ERA_TA']],
                                                         PRISM_data_all = PRISM_min[['Site','date','PRISM_TA']],
-                                                        temperature_type = 'min')
+                                                        temperature_type = 'min',
+                                                        start_date=start_date,
+                                                        end_date=end_date)
 historical_data_mean, data_source_mean = return_best_data(AMF_data_all = df[['Site','date','TA_F']],
                                                         ERA_data_all = ERA_mean[['Site','date','ERA_TA']],
                                                         PRISM_data_all = PRISM_mean[['Site','date','PRISM_TA']],
-                                                        temperature_type = 'average')
+                                                        temperature_type = 'average',
+                                                        start_date=start_date,
+                                                        end_date=end_date)
 
 # Now we save this data for future heatwave definition use
 os.chdir("/Users/marleeyork/Documents/project2/data/cleaned/")

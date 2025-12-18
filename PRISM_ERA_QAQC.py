@@ -84,17 +84,10 @@ def retrieve_correct_data(site, site_ERA_data, site_PRISM_data, preference):
     else:
         print("Something has gone wrong in retrieving the correct data, neither PRISM nor ERA was received.")
     
-    # Filter for widest available range of years in both datasets
-    start_year = max([site_ERA_data.date.dt.year.min(),site_PRISM_data.date.dt.year.min()])
-    end_year = min([site_ERA_data.date.dt.year.max(),site_PRISM_data.date.dt.year.max()])
-    
-    # Select all dates that fall within this date range 
-    correct_site_data = correct_site_data[correct_site_data.date.dt.year >= start_year]
-    correct_site_data = correct_site_data[correct_site_data.date.dt.year <= end_year]
-    
     return correct_site_data
 
-def return_best_data(AMF_data_all,ERA_data_all,PRISM_data_all,temperature_type):
+def return_best_data(AMF_data_all,ERA_data_all,PRISM_data_all,temperature_type,
+                     start_date,end_date):
     """
     Parameters
     ----------
@@ -131,6 +124,10 @@ def return_best_data(AMF_data_all,ERA_data_all,PRISM_data_all,temperature_type):
         site_AMF_data = AMF_data_all[AMF_data_all['Site']==site]
         site_ERA_data = ERA_data_all[ERA_data_all['Site']==site]
         site_PRISM_data = PRISM_data_all[PRISM_data_all['Site']==site]
+        
+        # Limit data years to those years specified
+        site_ERA_data = site_ERA_data[(site_ERA_data.date >= start_date) & (site_ERA_data.date <= end_date)]
+        site_PRISM_data = site_PRISM_data[(site_PRISM_data.date >= start_date) & (site_PRISM_data.date <= end_date)]
         
         if (temperature_type == "max"):
             site_AMF_data = find_max_temperatures(AMF_data_all.TIMESTAMP_START,AMF_data_all.TA_F)
