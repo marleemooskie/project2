@@ -11,7 +11,9 @@ first I will need to acquire the PRISM for these measrements.
 
 Also, we need PRISM data for Canada too.
 '''
+import pandas as pd
 import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
 pd.set_option("display.max_rows", 150)
 
 ###############################################################################
@@ -354,6 +356,10 @@ ERA_max.columns = ['Site','date','max_temperature','hist_TA']
 ERA_min.columns = ['Site','date','min_temperature','hist_TA']
 ERA_mean.columns = ['Site','date','TA_F','hist_TA']
 
+PRISM_max.columns = ['Site','date','max_temperature','hist_TA']
+PRISM_min.columns = ['Site','date','min_temperature','hist_TA']
+PRISM_mean.columns = ['Site','date','TA_F','hist_TA']
+
 # Drop those sites that we don't have for ERA and PRISM
 mask = ~PRISM_max.hist_TA.isna()
 PRISM_max = PRISM_max[mask]
@@ -621,6 +627,15 @@ invalid_heatwaves_min = pd.read_csv("invalid_heatwaves_min.csv")
 invalid_heatwaves_max = pd.read_csv("invalid_heatwaves_max.csv")
 invalid_heatwaves_mean = pd.read_csv("invalid_heatwaves_mean.csv")
 
+with open("heatwaves_max.pkl", "rb") as file:
+    heatwaves = pickle.load(file)
+    
+with open("heatwaves_min.pkl", "rb") as file:
+    heatwaves_min = pickle.load(file)
+
+with open("heatwaves_mean.pkl", "rb") as file:
+    heatwaves_mean = pickle.load(file)
+
 # Calculate percentages of invalid heatwaves at each site
 invalid_percentages_min = pd.DataFrame(columns=['Site','invalid_perc'])
 for site in heatwaves_min.keys():
@@ -652,7 +667,7 @@ invalid_percentages = pd.DataFrame(columns=['Site','invalid_perc'])
 for site in heatwaves.keys():
     # Pull the number overall and invalid
     num_heatwaves = len(heatwaves[site]['start_dates'])
-    num_invalid = len(invalid_heatwaves[invalid_heatwaves.Site==site])
+    num_invalid = len(invalid_heatwaves_max[invalid_heatwaves_max.Site==site])
     # Calculate percentage of invalid heatwaves at site
     if num_heatwaves > 0:
         invalid_perc = num_invalid / num_heatwaves
@@ -669,8 +684,12 @@ invalid_sites_max = invalid_percentages[invalid_percentages.invalid_perc >= .25]
 # Find the unique set of sites that have some type of invalidity
 invalid_sites = set(list(invalid_sites_min) + list(invalid_sites_max) + list(invalid_sites_mean))
 
+# Investigating specific sites that are causing issues
+struggle_sites = ['MX-Tes','US-ONA','US-xSJ','US-Wkg','US-SRM','US-xBN','US-xSB',
+                  'US-Prr','US-xJE','US-xGR']
+
 # Plot the valid and invalid heatwaves for each site for min, max, and mean heatwaves
-for site in invalid_sites:
+for site in struggle_sites:
     # Isolate data for that site
     site_df = df[df.Site==site]
     site_heatwaves_max = heatwaves[site]
@@ -742,6 +761,76 @@ for site in invalid_sites:
     
     input("Press [enter] to continue...")
 
+# Plotting the historical versus AMF data for each of the struggle sites
+for site in heatwaves.keys():
+    # Isolate historical data
+    site_hist_max = historical_data_max[historical_data_max.Site==site]
+    site_hist_min = historical_data_min[historical_data_min.Site==site]
+    site_hist_mean = historical_data_mean[historical_data_mean.Site==site]
+    
+    # Isolate AMF data
+    site_AMF_mean = df[df.Site==site][['TIMESTAMP','Site','TA_F']]
+    site_AMF_mean.columns = ['date','Site','TA_F']
+    site_AMF_HH = df_hourly[df_hourly.Site==site]
+    site_AMF_max = find_max_temperatures(site_AMF_HH.TIMESTAMP_START,site_AMF_HH.TA_F)
+    site_AMF_min = find_min_temperatures(site_AMF_HH.TIMESTAMP_START,site_AMF_HH.TA_F)
+    
+    # Merge the data together
+    site_max = pd.merge(site_AMF_max,site_hist_max,on='date',how='left')
+    site_min = pd.merge(site_AMF_min,site_hist_min,on='date',how='left')
+    site_mean = pd.merge(site_AMF_mean,site_hist_mean,on='date',how='left')
+    
+    # Now we plot everything
+    fig, ax = plt.subplots(1,3, figsize=(12,4))
+    ax[0].scatter(site_max.max_temperature,site_max.hist_TA,s=.5)
+    ax[0].set_title(f"Max for site {site}")
+    ax[0].plot([0, 30], [0, 30], 'r--', label="1:1 line")
+
+    ax[1].scatter(site_min.min_temperature,site_min.hist_TA,s=.5)
+    ax[1].set_title(f"Min for site {site}")
+    ax[1].plot([0, 30], [0, 30], 'r--', label="1:1 line")
+
+    ax[2].scatter(site_mean.TA_F,site_mean.hist_TA,s=.5)
+    ax[2].set_title(f"Mean for site {site}")
+    ax[2].plot([0, 30], [0, 30], 'r--', label="1:1 line")
+
+    # --- Adding regressions safely (drop NaNs) ---
+    def safe_regression(x, y, axis):
+        # Drop NaNs
+        mask = ~np.isnan(x) & ~np.isnan(y)
+        x_clean = x[mask].reshape(-1,1)
+        y_clean = y[mask]
+        if len(x_clean) > 1:  # need at least 2 points
+            model = LinearRegression().fit(x_clean, y_clean)
+            y_pred = model.predict(x_clean)
+            axis.plot(x_clean.flatten(), y_pred, 'b-', label="Regression fit")
+            axis.legend(fontsize=8)
+
+    safe_regression(site_max.max_temperature.values, site_max.hist_TA.values, ax[0])
+    safe_regression(site_min.min_temperature.values, site_min.hist_TA.values, ax[1])
+    safe_regression(site_mean.TA_F.values, site_mean.hist_TA.values, ax[2])
+    
+    plt.tight_layout()
+    plt.show()
+    
+    test_line_difference(site_max.max_temperature.values,
+                     site_max.hist_TA.values,
+                     label=f"{site} max")
+
+    test_line_difference(site_min.min_temperature.values,
+                     site_min.hist_TA.values,
+                     label=f"{site} min")
+
+    test_line_difference(site_mean.TA_F.values,
+                     site_mean.hist_TA.values,
+                     label=f"{site} mean")
+    
+    input("Press [enter] to continue...")
 
 
-   
+struggling_sites = ['US-EA6','US-EA5','US-xSR','US-CGG','US-xYE','CA-TPD']
+
+# I am saving the final sites
+final_sites = pd.DataFrame({"Site":heatwaves.keys()})
+final_sites.to_csv("final_site_list.csv")
+

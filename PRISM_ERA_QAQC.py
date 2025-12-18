@@ -7,6 +7,9 @@ import os
 os.chdir("/Users/marleeyork/Documents/project2/heatwave_definition")
 from define_heatwaves import *
 import warnings
+import numpy as np
+import statsmodels.api as sm
+
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
@@ -155,6 +158,40 @@ def return_best_data(AMF_data_all,ERA_data_all,PRISM_data_all,temperature_type,
     
     
     return historical_data, data_source
+
+def test_line_difference(x, y, label=""):
+    """Test whether slope=1 and intercept=0 using statsmodels."""
+    
+    # Drop NaNs
+    mask = ~np.isnan(x) & ~np.isnan(y)
+    x_clean = x[mask]
+    y_clean = y[mask]
+
+    if len(x_clean) < 3:
+        print(f"{label}: Not enough data for statistical test")
+        return
+
+    # Add constant for intercept
+    X = sm.add_constant(x_clean)
+
+    # Fit regression
+    model = sm.OLS(y_clean, X).fit()
+
+    # Extract coefficients
+    intercept = model.params[0]
+    slope = model.params[1]
+
+    # Hypothesis tests
+    slope_test = model.t_test("x1 = 1")
+    intercept_test = model.t_test("const = 0")
+
+    print(f"\n--- {label} ---")
+    print(f"Slope estimate:     {slope:.3f}")
+    print(f"Intercept estimate: {intercept:.3f}")
+    print(f"P-value (slope ≠ 1):     {slope_test.pvalue:.4f}")
+    print(f"P-value (intercept ≠ 0): {intercept_test.pvalue:.4f}")
+
+
 
 
 
