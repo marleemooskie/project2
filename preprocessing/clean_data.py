@@ -172,6 +172,103 @@ historical_data_mean.to_csv("historical_data_mean.csv")
 df.to_csv("AMF_DD.csv")
 df_hourly.to_csv("AMF_HH.csv")
 
+
+###############################################################################
+##                        Bad Data Edits                                     ##
+###############################################################################
+
+# Now we are going to adjust the PRISM/ERA historical data based on regressions
+# fit to historical data by AmeriFlux data. Not all sites will have enough data or
+# low enough variance to adjust the data. This is removing bias so that heatwaves
+# are based on more accurate historical data. 
+# Load in daily data
+AMF = pd.read_csv("/Users/marleeyork/Documents/project2/data/cleaned/AMF_DD.csv")
+AMF.date = pd.to_datetime(AMF.date)
+
+# Calculate daily minimum temperatures
+AMF_min = AMF.groupby("Site").apply(lambda g: find_min_temperatures(g.date, g.TA_F)).reset_index()
+AMF_min = AMF_min[['Site','date','min_temperature']]
+
+# Calculate daily maximum temperatures
+AMF_max = AMF.groupby("Site").apply(lambda g: find_max_temperatures(g.date, g.TA_F)).reset_index()
+AMF_max = AMF_max[['Site','date','max_temperature']]
+
+# Load in the historical data for mean, max, and min temperatures
+max = pd.read_csv("/Users/marleeyork/Documents/project2/data/cleaned/historical_data_max.csv")
+min = pd.read_csv("/Users/marleeyork/Documents/project2/data/cleaned/historical_data_min.csv")
+avg = pd.read_csv("/Users/marleeyork/Documents/project2/data/cleaned/historical_data_mean.csv")
+AMF = AMF.iloc[:,1:]
+AMF = AMF[['Site','date','TA_F']]
+max = max.iloc[:,1:]
+min = min.iloc[:,1:]
+avg = avg.iloc[:,1:]
+max.columns = ['Site','date','hist_max','Source_max']
+min.columns = ['Site','date','hist_min','Source_min']
+avg.columns = ['Site','date','hist_mean','Source_mean']
+max.date = pd.to_datetime(max.date)
+min.date = pd.to_datetime(min.date)
+avg.date = pd.to_datetime(avg.date)
+
+# Merge all these dataframes!
+# Historical data has no missing data
+historical_data = pd.merge(max, min, on=['Site','date'], how='inner')
+historical_data = pd.merge(historical_data, avg, on=['Site','date'], how='inner')
+AMF_data = pd.merge(AMF, AMF_min, on=['Site','date'], how='inner')
+AMF_data = pd.merge(AMF_data, AMF_max, on=['Site','date'], how='inner')
+AMF_data = pd.merge(AMF_data, historical_data, on=['Site','date'], how='left')
+AMF_data.dropna()
+
+# Get the adjusted data
+results = find_historical_bias(AMF_data)
+validity_df = can_we_correct(results,n=365*5,r2=.9)
+adjusted_data = make_adjustment(historical_data,results,validity_df)
+
+# Getting entire dictionary
+adjustment_dict = adjust_historical_data(historical_data=historical_data,
+                                         AMF_data=AMF_data,
+                                         n=365*5, # 5 years of AMF data
+                                         r2=.9)
+
+validity_df = adjustment_dict["validity"]
+reg_results = adjustment_dict["regressions"]
+hist_data_adj = adjustment_dict["adjustments"]
+
+# We can visually plot these differences now
+for site in hist_data_adj.Site.unique():
+    print(site)
+    # Grabbing the site data over the AMF dates
+    site_data = AMF_data[AMF_data.Site==site]
+    site_data_adj = hist_data_adj[hist_data_adj.Site==site]
+    site_data = pd.merge(site_data, site_data_adj, on=['Site','date'],how='left')
+    
+    # Plotting
+    fig, ax = plt.subplots(3,1,figsize=(6,10))
+    ax[0].scatter(site_data.TA_F, site_data.hist_mean, color="red", s=.5)
+    ax[0].scatter(site_data.TA_F, site_data.hist_mean_adj, color="blue", s=.5)
+    ax[0].plot([-30,30],[-30,30],color="black")
+    ax[0].set_ylabel("Historical Data (PRISM/ERA)")
+    ax[0].set_title(f"{site} Mean Temperature")
+    ax[1].scatter(site_data.max_temperature, site_data.hist_max, color="red", s=.5)
+    ax[1].scatter(site_data.max_temperature, site_data.hist_max_adj, color="blue", s=.5)
+    ax[1].plot([-30,30],[-30,30],color="black")
+    ax[1].set_ylabel("Historical Data (PRISM/ERA)")
+    ax[1].set_title(f"{site} Max Temperature")
+    ax[2].scatter(site_data.min_temperature, site_data.hist_min, color="red", s=.5, label="Original Data")
+    ax[2].scatter(site_data.min_temperature, site_data.hist_min_adj, color="blue", s=.5, label="Adjusted Data")
+    ax[2].plot([-30,30],[-30,30],color="black")
+    ax[2].set_ylabel("Historical Data (PRISM/ERA)")
+    ax[2].set_xlabel("AmeriFlux Temperature")
+    ax[2].set_title(f"{site} Min Temperature")
+    ax[2].legend()  
+    plt.tight_layout()
+    plt.show()
+    
+    input("Press [enter] to continue...")
+
+# Save the historical data to a csv
+hist_data_adj.to_csv("/Users/marleeyork/Documents/project2/data/cleaned/historical_data_adjusted.csv")
+
+
 ###############################################################################
 ##                        Bad Data Edits                                     ##
 ###############################################################################

@@ -2,51 +2,17 @@
 This script includes functions to  adjust the PRISM and ERA data based on the 
 AmeriFlux data for each site.
 """
+import os
 from sklearn.linear_model import LinearRegression
 import pandas as pd
 import matplotlib.pyplot as plt
-
-# This is an example of loading in the cleaned historical data for application
-# to adjustment
-
-# Load in daily data
-AMF = pd.read_csv("/Users/marleeyork/Documents/project2/data/cleaned/AMF_DD.csv")
-AMF.date = pd.to_datetime(AMF.date)
-
-# Calculate daily minimum temperatures
-AMF_min = AMF.groupby("Site").apply(lambda g: find_min_temperatures(g.date, g.TA_F)).reset_index()
-AMF_min = AMF_min[['Site','date','min_temperature']]
-
-# Calculate daily maximum temperatures
-AMF_max = AMF.groupby("Site").apply(lambda g: find_max_temperatures(g.date, g.TA_F)).reset_index()
-AMF_max = AMF_max[['Site','date','max_temperature']]
-
-# Load in the historical data for mean, max, and min temperatures
-max = pd.read_csv("/Users/marleeyork/Documents/project2/data/cleaned/historical_data_max.csv")
-min = pd.read_csv("/Users/marleeyork/Documents/project2/data/cleaned/historical_data_min.csv")
-avg = pd.read_csv("/Users/marleeyork/Documents/project2/data/cleaned/historical_data_mean.csv")
-AMF = AMF.iloc[:,1:]
-AMF = AMF[['Site','date','TA_F']]
-max = max.iloc[:,1:]
-min = min.iloc[:,1:]
-avg = avg.iloc[:,1:]
-max.columns = ['Site','date','hist_max','Source_max']
-min.columns = ['Site','date','hist_min','Source_min']
-avg.columns = ['Site','date','hist_mean','Source_mean']
-max.date = pd.to_datetime(max.date)
-min.date = pd.to_datetime(min.date)
-avg.date = pd.to_datetime(avg.date)
-
-# Merge all these dataframes!
-df = pd.merge(max, min, on=['Site','date'], how='inner')
-df = pd.merge(df, avg, on=['Site','date'], how='inner')
-df = pd.merge(AMF, df, on=['Site','date'], how='left')
-df = pd.merge(df, AMF_min, on=['Site','date'], how='inner')
-df = pd.merge(df, AMF_max, on=['Site','date'], how='inner')
-df = df.dropna()
+import numpy as np
 
 def fit_sklearn(group: pd.DataFrame, x, y):
     """
+    Description: This fits a regression to historical data by Ameriflux data
+    and returns a dataframe a results across all sites.
+    
     Parameters
     ----------
     group : pd.DataFrame
@@ -81,6 +47,9 @@ def fit_sklearn(group: pd.DataFrame, x, y):
 
 def find_historical_bias(final_data):
     """
+    Description: This calculates the bias regressions for historical mean, min,
+    and max across all sites.
+    
     Parameters
     ----------
     final_data : TYPE
@@ -157,13 +126,18 @@ def can_we_correct(results: pd.DataFrame, n, r2):
     
     return validity_df
 
-def make_adjustment(final_data, results, validity_df):
+def make_adjustment(historical_data: pd.DataFrame, results: pd.DataFrame, validity_df: pd.DataFrame):
     """
+    Description: This adjusts the data by those bias regressions and returns the 
+    adjusted historical data for 1990-2023
+    
     Parameters
     ----------
-    results : TYPE
+    historical_data : pd.DataFrame
+        DESCRIPTION. The complete (1990-2025) historical timeseries of min, max, and mean temperatures
+    results : pd.DataFrame
         DESCRIPTION. Dataframe from find_historical_bias of the adjustment regressions
-    validity_df : TYPE
+    validity_df : pd.DataFrame
         DESCRIPTION. Dataframe from can_we_correct of whether or not we can adjust site data
 
     Returns
@@ -173,25 +147,95 @@ def make_adjustment(final_data, results, validity_df):
 
     """
     # Initialize dataframe for adjusted data
-    adjusted_data = final_data[['Site','date','TA_F','min_temperature','max_temperature']]
+    adjusted_data = pd.DataFrame(columns=['Site','date','hist_max_adj','hist_min_adj','hist_mean_adj'])
     # Loop through each site
     for site in validity_df.Site:
+        print(site)
         # Isolate site data
-        site_data = final_data[final_data.Site==site]
+        site_data = historical_data[historical_data.Site==site]
+        site_adjusted = site_data[['Site','date']]
         # Check if we can adjust the max data
         if (validity_df[validity_df.Site==site].Max.iloc[0] == 1):
             # Find the regression 
             intercept = results[results.Site==site].intercept_max.iloc[0]
             slope = results[results.Site==site].coef_x_max.iloc[0]
             # Use this regression to adjust the data
-            adjusted_max = (site_data.hist_max / slope) - intercept
+            site_adjusted["hist_max_adj"] = (site_data.hist_max / slope) - intercept
         else:
             # Return NA
-            adjusted_max = [np.nan]*len(site_data)
-    
+            site_adjusted["hist_max_adj"] = [np.nan]*len(site_data)
+        
+        # Check if we can adjust the min data
+        if (validity_df[validity_df.Site==site].Min.iloc[0]==1):
+            # Find the regression
+            intercept = results[results.Site==site].intercept_min.iloc[0]
+            slope = results[results.Site==site].coef_x_min.iloc[0]
+            # Use this regression to adjust the data
+            site_adjusted["hist_min_adj"] = (site_data.hist_min / slope) - intercept
+        else:
+            # Return NA
+            site_adjusted["hist_min_adj"] = [np.nan]*len(site_data)
+            
+        # Finally, checking if we can ajust mean data
+        if (validity_df[validity_df.Site==site].Mean.iloc[0]==1):
+            # Find the regression
+            intercept = results[results.Site==site].intercept_mean.iloc[0]
+            slope = results[results.Site==site].coef_x_mean.iloc[0]
+            # Us this regression to adjust the data
+            site_adjusted["hist_mean_adj"] = (site_data.hist_mean / slope) - intercept
+        else:
+            # Return NA
+            site_adjusted["hist_mean_adj"] = [np.nan]*len(site_data)
+        
+        # Concatenate the site adjusted to all other
+        adjusted_data = pd.concat([adjusted_data, site_adjusted])
+
     return adjusted_data
 
-fig, ax = plt.subplots()
-ax.scatter(site_data.max_temperature, adjusted_max, s=.5)
-ax.plot([-30,30],[-30,30],color='red')
-plt.show()
+def adjust_historical_data(historical_data: pd.DataFrame, AMF_data: pd.DataFrame, n: int, r2: float):
+    """
+    Description: This performs final adjustment and returns the bias corrections,
+    validity, and the adjusted data itself.
+    
+    Parameters
+    ----------
+    historical_data : pd.DataFrame
+        DESCRIPTION. 34 years of historical PRISM or ERA data including column names
+        ["Site","date","hist_max","hist_min","hist_mean"]
+    AMF_data : pd.DataFrame
+        DESCRIPTION. AmeriFlux data for temperature variables including columns
+        ["Site","date","TA_F","max_temperature","min_temperature"]
+    n : int
+        DESCRIPTION. Minimum number of AMF days we want for a proper adjusting regression
+    r2 : float
+        DESCRIPTION. Minimum R2 we want for a proper adjusting regression
+
+    Returns
+    -------
+    adjustment_dict : Dictionary
+        DESCRIPTION. Includes dataframe of which sites we can validly adjust,
+        dataframe of the fittest regressions between AMF and historical data, 
+        and dataframe of adjusted historical data
+    """
+    
+    # Merge historical and AMF datasets
+    reg_data = pd.merge(AMF_data, historical_data, on=['Site','date'],how='left').dropna()
+    
+    # Use historical data over AMF dates to calculate regression
+    reg_results = find_historical_bias(reg_data)
+    
+    # Find those sites which we can adjust the historical data for based on the regressions
+    validity_df = can_we_correct(reg_results, n=365*5, r2=.9)
+    
+    # Now we actually adjust the data
+    adjusted_data = make_adjustment(historical_data, reg_results, validity_df)
+    
+    # Store this into a dictionary
+    adjustment_dict = {
+        "validity":validity_df,
+        "regressions":reg_results,
+        "adjustments":adjusted_data
+        }
+    
+    
+    return adjustment_dict
