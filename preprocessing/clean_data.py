@@ -3,7 +3,7 @@ This script will load in and provide the cleaned data for all performed analysis
 All analysis should be performed using this cleaned data.
 '''
 import os
-os.chdir("/Users/marleeyork/Documents/project2")
+os.chdir("/Users/marleeyork/Documents/project2/preprocessing")
 from load_data import *
 from heatwave_QAQC import *
 from PRISM_ERA_QAQC import *
@@ -268,6 +268,18 @@ for site in hist_data_adj.Site.unique():
 # Save the historical data to a csv
 hist_data_adj.to_csv("/Users/marleeyork/Documents/project2/data/cleaned/historical_data_adjusted.csv")
 
+###############################################################################
+##                         Loading in SWC data                               ##
+###############################################################################
+
+# First, find the sites that actually have SWC measures
+swc_measures = ["SWC_F_MDS_1","SWC_F_MDS_2","SWC_F_MDS_3","SWC_F_MDS_4","SWC_F_MDS_5",
+                "SWC_F_MDS_1_QC","SWC_F_MDS_2_QC","SWC_F_MDS_3_QC","SWC_F_MDS_4_QC",
+                "SWC_F_MDS_5_QC"]
+shared_swc = find_shared_variables('/Users/marleeyork/Documents/project2/data/cleaned/AMF_DD.csv',swc_measures)
+
+site_presence = shared_swc['site_presence']
+site_presence[site_presence['Site'].isin(['US-Ho1','US-Syv','US-Kon'])]
 
 ###############################################################################
 ##                        Bad Data Edits                                     ##
