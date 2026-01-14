@@ -7,6 +7,7 @@ os.chdir("/Users/marleeyork/Documents/project2/preprocessing")
 from load_data import *
 from heatwave_QAQC import *
 from PRISM_ERA_QAQC import *
+from adjusting_data import *
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.pyplot as plt
@@ -184,39 +185,40 @@ df_hourly.to_csv("AMF_HH.csv")
 # Load in daily data
 AMF = pd.read_csv("/Users/marleeyork/Documents/project2/data/cleaned/AMF_DD.csv")
 AMF.date = pd.to_datetime(AMF.date)
+AMF_HH = pd.read_csv("/Users/marleeyork/Documents/project2/data/cleaned/AMF_HH.csv")
+AMF_HH.TIMESTAMP_START = pd.to_datetime(AMF_HH.TIMESTAMP_START)
 
 # Calculate daily minimum temperatures
-AMF_min = AMF.groupby("Site").apply(lambda g: find_min_temperatures(g.date, g.TA_F)).reset_index()
+AMF_min = AMF_HH.groupby("Site").apply(lambda g: find_min_temperatures(g.TIMESTAMP_START, g.TA_F)).reset_index()
 AMF_min = AMF_min[['Site','date','min_temperature']]
 
 # Calculate daily maximum temperatures
-AMF_max = AMF.groupby("Site").apply(lambda g: find_max_temperatures(g.date, g.TA_F)).reset_index()
+AMF_max = AMF_HH.groupby("Site").apply(lambda g: find_max_temperatures(g.TIMESTAMP_START, g.TA_F)).reset_index()
 AMF_max = AMF_max[['Site','date','max_temperature']]
 
 # Load in the historical data for mean, max, and min temperatures
-max = pd.read_csv("/Users/marleeyork/Documents/project2/data/cleaned/historical_data_max.csv")
-min = pd.read_csv("/Users/marleeyork/Documents/project2/data/cleaned/historical_data_min.csv")
-avg = pd.read_csv("/Users/marleeyork/Documents/project2/data/cleaned/historical_data_mean.csv")
+hist_max = pd.read_csv("/Users/marleeyork/Documents/project2/data/cleaned/historical_data_max.csv")
+hist_min = pd.read_csv("/Users/marleeyork/Documents/project2/data/cleaned/historical_data_min.csv")
+hist_avg = pd.read_csv("/Users/marleeyork/Documents/project2/data/cleaned/historical_data_mean.csv")
 AMF = AMF.iloc[:,1:]
 AMF = AMF[['Site','date','TA_F']]
-max = max.iloc[:,1:]
-min = min.iloc[:,1:]
-avg = avg.iloc[:,1:]
-max.columns = ['Site','date','hist_max','Source_max']
-min.columns = ['Site','date','hist_min','Source_min']
-avg.columns = ['Site','date','hist_mean','Source_mean']
-max.date = pd.to_datetime(max.date)
-min.date = pd.to_datetime(min.date)
-avg.date = pd.to_datetime(avg.date)
+hist_max = hist_max.iloc[:,1:]
+hist_min = hist_min.iloc[:,1:]
+hist_avg = hist_avg.iloc[:,1:]
+hist_max.columns = ['Site','date','hist_max','Source_max']
+hist_min.columns = ['Site','date','hist_min','Source_min']
+hist_avg.columns = ['Site','date','hist_mean','Source_mean']
+hist_max.date = pd.to_datetime(hist_max.date)
+hist_min.date = pd.to_datetime(hist_min.date)
+hist_avg.date = pd.to_datetime(hist_avg.date)
 
 # Merge all these dataframes!
 # Historical data has no missing data
-historical_data = pd.merge(max, min, on=['Site','date'], how='inner')
-historical_data = pd.merge(historical_data, avg, on=['Site','date'], how='inner')
+historical_data = pd.merge(hist_max, hist_min, on=['Site','date'], how='inner')
+historical_data = pd.merge(historical_data, hist_avg, on=['Site','date'], how='inner')
 AMF_data = pd.merge(AMF, AMF_min, on=['Site','date'], how='inner')
 AMF_data = pd.merge(AMF_data, AMF_max, on=['Site','date'], how='inner')
-AMF_data = pd.merge(AMF_data, historical_data, on=['Site','date'], how='left')
-AMF_data.dropna()
+AMF_data = AMF_data.dropna()
 
 # Get the adjusted data
 results = find_historical_bias(AMF_data)
@@ -226,7 +228,7 @@ adjusted_data = make_adjustment(historical_data,results,validity_df)
 # Getting entire dictionary
 adjustment_dict = adjust_historical_data(historical_data=historical_data,
                                          AMF_data=AMF_data,
-                                         n=365*5, # 5 years of AMF data
+                                         n=365*5, 
                                          r2=.9)
 
 validity_df = adjustment_dict["validity"]
@@ -234,6 +236,7 @@ reg_results = adjustment_dict["regressions"]
 hist_data_adj = adjustment_dict["adjustments"]
 
 # We can visually plot these differences now
+AMF_data = pd.merge(AMF_data, historical_data,on=['Site','date'],how='inner')
 for site in hist_data_adj.Site.unique():
     print(site)
     # Grabbing the site data over the AMF dates

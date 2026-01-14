@@ -511,7 +511,10 @@ def fit_heatwaves(flux_dates, flux_temperature,
                plot ~ plot of max temperatures with heatwave days in red
     '''
     # Define heatwaves using the max approach
-    if (method == 'max'):
+    if (historical_temperature.isna().sum() > 0):
+        return
+        
+    elif (method == 'max'):
         # Find maximum temperature for each flux day
         daily_max_temperatures = find_max_temperatures(flux_dates,flux_temperature)
         # Find moving quantile window for flux data temperature
@@ -537,12 +540,12 @@ def fit_heatwaves(flux_dates, flux_temperature,
         # Default leniency is 1 gap day per every 8 days of heatwave, with min 
         # number of 3 consecutive hotdays for a heatwave
         start_dates, end_dates = find_heatwaves(
-             dates = hotdays.date, 
-             hotdays = hotdays.hotday_indicator,
-             minimum_length = min_heatwave_length, 
-             tolerance = tolerance, 
-             gap_day_window = gap_days_window
-             )
+            dates = hotdays.date, 
+            hotdays = hotdays.hotday_indicator,
+            minimum_length = min_heatwave_length, 
+            tolerance = tolerance, 
+            gap_day_window = gap_days_window
+            )
         
         # Get the summary of the heatwaves
         summary = describe_heatwaves(
@@ -697,10 +700,7 @@ def fit_heatwaves(flux_dates, flux_temperature,
         ax.plot(daily_mean_temperatures.date,daily_mean_temperatures.quantiles,c='black',linewidth=1)
         ax.set_title(f"Mean: {site}")
         heatwave_plot = fig
-        
-        
-        
-        
+    
     # Create a dictionary and store all of these inside it!
     heatwaves = {
         "start_dates":start_dates,
@@ -740,14 +740,15 @@ def calculate_moisture(timeseries_dates,timeseries_moisture,start_dates,end_date
         # If we have moisture for that dataset
         if len(moisture) > 0:
             # Calculate average moisture
-            average = sum(moisture) / len(moisture)
-            total = sum(moisture)
-            variability = np.std(moisture)
+            average = np.nansum(moisture) / np.sum(~np.isnan(moisture))
+            total = np.sum(~np.isnan(moisture))
+            variability = np.nanstd(moisture)
             # Add to list of heatwave moisture averages
         else:
             average = pd.NA
             total = pd.NA
             moisture = pd.NA
+            variability = pd.NA
         moisture_averages.append(average)
         moisture_totals.append(total)
         moisture_variability.append(variability)

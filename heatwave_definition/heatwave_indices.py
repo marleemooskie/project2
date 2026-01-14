@@ -4,7 +4,7 @@ This script will calculate magitude and intensities of each heatwave.
 import pandas as pd
 from define_heatwaves import *
 
-def cumulative_exceedence(heatwaves_dictionary, AMF_TA, historical_data, method):
+def cumulative_exceedence(heatwaves_dictionary, AMF_TA, historical_data, TA_name, method):
     '''
     This function integrates over a heatwave and returns the summed and average 
     deviation from th 95th percentile of historical temperature for that day. This
@@ -56,7 +56,7 @@ def cumulative_exceedence(heatwaves_dictionary, AMF_TA, historical_data, method)
         # Pull out the dictionary for that site
         site_dictionary = heatwaves_dictionary[site]
         site_historical = historical_data[historical_data['Site']==site]
-        historical_temperature = site_historical['hist_TA']
+        historical_temperature = site_historical[TA_name]
         historical_dates = pd.to_datetime(site_historical['date'])
         site_heatwaves = pd.DataFrame({'start_dates':site_dictionary['start_dates'],
                                        'end_dates':site_dictionary['end_dates']})

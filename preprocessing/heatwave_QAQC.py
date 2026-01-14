@@ -36,6 +36,10 @@ def avg_QAQC_check(site_heatwave_dictionary, dates, TA_QAQC, QAQC_threshold,
         heatwave that have a QAQC below the necessary threshold (QAQC_percentage), and validity of the
         heatwave based on accepted QAQC_percentage as defined by heatwave threshold (heatwave_invalidity)
     '''
+    # If the site didn't have any valid data, then we skip it
+    if pd.isna(site_heatwave_dictionary['start_dates']).all():
+        return 
+    # Otherwise, we check for invalid heatwave flags
     start_dates = site_heatwave_dictionary['start_dates']
     end_dates = site_heatwave_dictionary['end_dates']
     ta_qaqc = pd.DataFrame({'dates':dates,'QAQC':TA_QAQC})
@@ -106,6 +110,10 @@ def minmax_QAQC_check(site_heatwave_dictionary, dates, TA, TA_QAQC, heatwave_thr
         heatwave that have a QAQC below the necessary threshold (QAQC_percentage), and validity of the
         heatwave based on accepted QAQC_percentage as defined by heatwave threshold (heatwave_invalidity)
     '''
+    # If the site doesn't have valid data, then skip it
+    if pd.isna(site_heatwave_dictionary['start_dates']).all():
+        return 
+    
     # Initialize list to hold flags for heatwaves surpassing the valid amount of downscaled data
     flag = []
     # Get find max hourly temperature
